@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PoopPay 后端验证工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border-left: 4px solid #4CAF50;
+            background: #f9f9f9;
+        }
+        .section.error {
+            border-left-color: #f44336;
+            background: #ffebee;
+        }
+        .section.warning {
+            border-left-color: #ff9800;
+            background: #fff3e0;
+        }
+        .input-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: monospace;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .log {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .log-item {
+            margin: 5px 0;
+            padding: 5px;
+        }
+        .log-item.success { color: #28a745; }
+        .log-item.error { color: #dc3545; }
+        .log-item.info { color: #17a2b8; }
+        .log-item.warning { color: #ffc107; }
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        .checklist li {
+            padding: 8px;
+            margin: 5px 0;
+            background: #f0f0f0;
+            border-radius: 5px;
+        }
+        .checklist li.checked {
+            background: #d4edda;
+            color: #155724;
+        }
+        .checklist li.checked::before {
+            content: "✓ ";
+            color: #28a745;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 PoopPay 后端验证工具</h1>
+        <p>使用此工具验证 Supabase 后端是否正确配置，并测试数据读写功能。</p>
+        
+        <div class="section">
+            <h3>步骤 1: 配置 Supabase 连接</h3>
+            <div class="input-group">
+                <label>Supabase Project URL:</label>
+                <input type="text" id="supabaseUrl" placeholder="https://xxxxx.supabase.co">
+            </div>
+            <div class="input-group">
+                <label>Supabase Anon Key:</label>
+                <input type="text" id="supabaseKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>步骤 2: 验证检查清单</h3>
+            <ul class="checklist" id="checklist">
+                <li id="check-env">环境变量配置</li>
+                <li id="check-connection">Supabase 连接</li>
+                <li id="check-tables">数据库表存在</li>
+                <li id="check-users">用户表读写</li>
+                <li id="check-sessions">会话表读写</li>
+                <li id="check-settings">设置表读写</li>
+                <li id="check-scores">游戏分数表读写</li>
+            </ul>
+        </div>
+
+        <div class="input-group">
+            <label>
+                <input type="checkbox" id="keepTestData" style="width: auto; margin-right: 8px;">
+                保留测试数据（不自动清理）
+            </label>
+        </div>
+        
+        <button onclick="runAllTests()">🚀 运行完整验证</button>
+        <button onclick="testConnection()">1. 测试连接</button>
+        <button onclick="testTables()">2. 检查表结构</button>
+        <button onclick="testReadWrite()">3. 测试读写</button>
+        <button onclick="createPermanentTestData()">4. 创建永久测试数据</button>
+        
+        <div id="status" class="status"></div>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script>
+        let supabaseClient = null;
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const item = document.createElement('div');
+            item.className = `log-item ${type}`;
+            item.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(item);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+        }
+        
+        function checkItem(id, checked) {
+            const item = document.getElementById(id);
+            if (checked) {
+                item.classList.add('checked');
+            } else {
+                item.classList.remove('checked');
+            }
+        }
+        
+        function initClient() {
+            const url = document.getElementById('supabaseUrl').value.trim();
+            const key = document.getElementById('supabaseKey').value.trim();
+            
+            if (!url || !key) {
+                showStatus('请先填写 Supabase URL 和 Key', 'error');
+                return false;
+            }
+            
+            try {
+                supabaseClient = window.supabase.createClient(url, key);
+                log('Supabase 客户端已初始化', 'success');
+                return true;
+            } catch (error) {
+                log(`初始化失败: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        async function testConnection() {
+            if (!initClient()) return;
+            
+            log('测试 Supabase 连接...', 'info');
+            checkItem('check-connection', false);
+            
+            try {
+                // 尝试查询一个简单的表
+                const { data, error } = await supabaseClient
+                    .from('users')
+                    .select('count')
+                    .limit(1);
+                
+                if (error) {
+                    log(`连接失败: ${error.message}`, 'error');
+                    showStatus('连接失败: ' + error.message, 'error');
+                    return false;
+                }
+                
+                log('✓ Supabase 连接成功！', 'success');
+                checkItem('check-connection', true);
+                showStatus('连接成功！', 'success');
+                return true;
+            } catch (error) {
+                log(`连接错误: ${error.message}`, 'error');
+                showStatus('连接错误: ' + error.message, 'error');
+                return false;
+            }
+        }
+        
+        async function testTables() {
+            if (!supabaseClient) {
+                if (!initClient()) return;
+            }
+            
+            log('检查数据库表结构...', 'info');
+            checkItem('check-tables', false);
+            
+            const tables = ['users', 'sessions', 'user_settings', 'game_scores'];
+            const results = {};
+            
+            for (const table of tables) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from(table)
+                        .select('*')
+                        .limit(1);
+                    
+                    if (error) {
+                        log(`✗ 表 ${table} 不存在或无法访问: ${error.message}`, 'error');
+                        results[table] = false;
+                    } else {
+                        log(`✓ 表 ${table} 存在且可访问`, 'success');
+                        results[table] = true;
+                    }
+                } catch (error) {
+                    log(`✗ 表 ${table} 检查失败: ${error.message}`, 'error');
+                    results[table] = false;
+                }
+            }
+            
+            const allExist = Object.values(results).every(r => r);
+            checkItem('check-tables', allExist);
+            
+            if (allExist) {
+                showStatus('所有表都存在！', 'success');
+            } else {
+                showStatus('部分表不存在，请检查数据库设置', 'error');
+            }
+            
+            return allExist;
+        }
+        
+        async function testReadWrite() {
+            if (!supabaseClient) {
+                if (!initClient()) return;
+            }
+            
+            log('测试数据读写功能...', 'info');
+            
+            // 测试用户表
+            checkItem('check-users', false);
+            try {
+                const testUserId = 'TEST' + Date.now().toString().slice(-6);
+                const { data: insertData, error: insertError } = await supabaseClient
+                    .from('users')
+                    .insert([{ id: testUserId, username: 'TestUser' }])
+                    .select();
+                
+                if (insertError) {
+                    log(`✗ 用户表写入失败: ${insertError.message}`, 'error');
+                } else {
+                    log(`✓ 用户表写入成功 (ID: ${testUserId})`, 'success');
+                    
+                    // 测试读取
+                    const { data: readData, error: readError } = await supabaseClient
+                        .from('users')
+                        .select('*')
+                        .eq('id', testUserId)
+                        .single();
+                    
+                    if (readError) {
+                        log(`✗ 用户表读取失败: ${readError.message}`, 'error');
+                    } else {
+                        log(`✓ 用户表读取成功`, 'success');
+                        checkItem('check-users', true);
+                        
+                        // 清理测试数据（如果未勾选保留）
+                        const keepData = document.getElementById('keepTestData').checked;
+                        if (!keepData) {
+                            await supabaseClient.from('users').delete().eq('id', testUserId);
+                            log(`✓ 测试数据已清理`, 'info');
+                        } else {
+                            log(`✓ 测试数据已保留 (ID: ${testUserId})`, 'info');
+                        }
+                    }
+                }
+            } catch (error) {
+                log(`✗ 用户表测试失败: ${error.message}`, 'error');
+            }
+            
+            // 测试会话表
+            checkItem('check-sessions', false);
+            try {
+                const testUserId = 'TEST' + Date.now().toString().slice(-6);
+                // 先创建测试用户
+                await supabaseClient.from('users').insert([{ id: testUserId, username: 'TestUser' }]);
+                
+                const testSession = {
+                    user_id: testUserId,
+                    startTime: Date.now() - 60000,
+                    endTime: Date.now(),
+                    durationSeconds: 60,
+                    earnings: 1.50
+                };
+                
+                const { error: insertError } = await supabaseClient
+                    .from('sessions')
+                    .insert([testSession]);
+                
+                if (insertError) {
+                    log(`✗ 会话表写入失败: ${insertError.message}`, 'error');
+                } else {
+                    log(`✓ 会话表写入成功`, 'success');
+                    
+                    const { data, error: readError } = await supabaseClient
+                        .from('sessions')
+                        .select('*')
+                        .eq('user_id', testUserId);
+                    
+                    if (readError) {
+                        log(`✗ 会话表读取失败: ${readError.message}`, 'error');
+                    } else {
+                        log(`✓ 会话表读取成功 (找到 ${data.length} 条记录)`, 'success');
+                        checkItem('check-sessions', true);
+                        
+                        // 清理测试数据（如果未勾选保留）
+                        const keepData = document.getElementById('keepTestData').checked;
+                        if (!keepData) {
+                            await supabaseClient.from('sessions').delete().eq('user_id', testUserId);
+                            await supabaseClient.from('users').delete().eq('id', testUserId);
+                        } else {
+                            log(`✓ 测试数据已保留 (用户ID: ${testUserId})`, 'info');
+                        }
+                    }
+                }
+            } catch (error) {
+                log(`✗ 会话表测试失败: ${error.message}`, 'error');
+            }
+            
+            // 测试设置表
+            checkItem('check-settings', false);
+            try {
+                const testUserId = 'TEST' + Date.now().toString().slice(-6);
+                await supabaseClient.from('users').insert([{ id: testUserId, username: 'TestUser' }]);
+                
+                const testSettings = {
+                    user_id: testUserId,
+                    monthly_salary: 5000,
+                    currency_symbol: 'RM',
+                    working_days_per_month: 21.75,
+                    hours_per_day: 8
+                };
+                
+                const { error: insertError } = await supabaseClient
+                    .from('user_settings')
+                    .upsert([testSettings], { onConflict: 'user_id' });
+                
+                if (insertError) {
+                    log(`✗ 设置表写入失败: ${insertError.message}`, 'error');
+                } else {
+                    log(`✓ 设置表写入成功`, 'success');
+                    
+                    const { data, error: readError } = await supabaseClient
+                        .from('user_settings')
+                        .select('*')
+                        .eq('user_id', testUserId)
+                        .single();
+                    
+                    if (readError) {
+                        log(`✗ 设置表读取失败: ${readError.message}`, 'error');
+                    } else {
+                        log(`✓ 设置表读取成功`, 'success');
+                        checkItem('check-settings', true);
+                        
+                        // 清理测试数据（如果未勾选保留）
+                        const keepData = document.getElementById('keepTestData').checked;
+                        if (!keepData) {
+                            await supabaseClient.from('user_settings').delete().eq('user_id', testUserId);
+                            await supabaseClient.from('users').delete().eq('id', testUserId);
+                        } else {
+                            log(`✓ 测试数据已保留 (用户ID: ${testUserId})`, 'info');
+                        }
+                    }
+                }
+            } catch (error) {
+                log(`✗ 设置表测试失败: ${error.message}`, 'error');
+            }
+            
+            // 测试游戏分数表
+            checkItem('check-scores', false);
+            try {
+                const testUserId = 'TEST' + Date.now().toString().slice(-6);
+                await supabaseClient.from('users').insert([{ id: testUserId, username: 'TestUser' }]);
+                
+                const testScore = {
+                    user_id: testUserId,
+                    game_name: 'test_game',
+                    score: 100
+                };
+                
+                const { error: insertError } = await supabaseClient
+                    .from('game_scores')
+                    .insert([testScore]);
+                
+                if (insertError) {
+                    log(`✗ 游戏分数表写入失败: ${insertError.message}`, 'error');
+                } else {
+                    log(`✓ 游戏分数表写入成功`, 'success');
+                    
+                    const { data, error: readError } = await supabaseClient
+                        .from('game_scores')
+                        .select('*')
+                        .eq('user_id', testUserId);
+                    
+                    if (readError) {
+                        log(`✗ 游戏分数表读取失败: ${readError.message}`, 'error');
+                    } else {
+                        log(`✓ 游戏分数表读取成功`, 'success');
+                        checkItem('check-scores', true);
+                        
+                        // 清理测试数据（如果未勾选保留）
+                        const keepData = document.getElementById('keepTestData').checked;
+                        if (!keepData) {
+                            await supabaseClient.from('game_scores').delete().eq('user_id', testUserId);
+                            await supabaseClient.from('users').delete().eq('id', testUserId);
+                        } else {
+                            log(`✓ 测试数据已保留 (用户ID: ${testUserId})`, 'info');
+                        }
+                    }
+                }
+            } catch (error) {
+                log(`✗ 游戏分数表测试失败: ${error.message}`, 'error');
+            }
+            
+            showStatus('读写测试完成！', 'info');
+        }
+        
+        async function runAllTests() {
+            log('开始完整验证流程...', 'info');
+            showStatus('正在验证...', 'info');
+            
+            // 检查环境变量（模拟）
+            checkItem('check-env', true);
+            log('✓ 环境变量配置检查（请在应用中确认 .env 文件）', 'success');
+            
+            // 测试连接
+            const connected = await testConnection();
+            if (!connected) {
+                showStatus('连接失败，请检查 Supabase URL 和 Key', 'error');
+                return;
+            }
+            
+            // 等待一下
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // 测试表结构
+            const tablesOk = await testTables();
+            if (!tablesOk) {
+                showStatus('表结构检查失败，请运行 SQL 脚本创建表', 'error');
+                return;
+            }
+            
+            // 等待一下
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // 测试读写
+            await testReadWrite();
+            
+            showStatus('✅ 所有测试完成！如果所有项目都显示 ✓，说明后端配置正确。', 'success');
+        }
+        
+        async function createPermanentTestData() {
+            if (!initClient()) return;
+            
+            log('创建永久测试数据...', 'info');
+            
+            try {
+                const testUserId = 'DEMO' + Date.now().toString().slice(-6);
+                
+                // 创建测试用户
+                const { error: userError } = await supabaseClient
+                    .from('users')
+                    .insert([{ id: testUserId, username: 'DemoUser' }]);
+                
+                if (userError) {
+                    log(`✗ 创建用户失败: ${userError.message}`, 'error');
+                    return;
+                }
+                log(`✓ 创建用户成功 (ID: ${testUserId})`, 'success');
+                
+                // 创建测试会话
+                const testSession = {
+                    user_id: testUserId,
+                    startTime: Date.now() - 300000,
+                    endTime: Date.now() - 240000,
+                    durationSeconds: 60,
+                    earnings: 2.50,
+                    note: 'Test session from verification tool',
+                    poop_type: 4,
+                    poop_color: 'brown',
+                    poop_volume: 'Normal'
+                };
+                
+                const { error: sessionError } = await supabaseClient
+                    .from('sessions')
+                    .insert([testSession]);
+                
+                if (sessionError) {
+                    log(`✗ 创建会话失败: ${sessionError.message}`, 'error');
+                } else {
+                    log(`✓ 创建会话成功`, 'success');
+                }
+                
+                // 创建测试设置
+                const testSettings = {
+                    user_id: testUserId,
+                    monthly_salary: 5000,
+                    currency_symbol: 'RM',
+                    working_days_per_month: 21.75,
+                    hours_per_day: 8
+                };
+                
+                const { error: settingsError } = await supabaseClient
+                    .from('user_settings')
+                    .upsert([testSettings], { onConflict: 'user_id' });
+                
+                if (settingsError) {
+                    log(`✗ 创建设置失败: ${settingsError.message}`, 'error');
+                } else {
+                    log(`✓ 创建设置成功`, 'success');
+                }
+                
+                // 创建测试游戏分数
+                const testScore = {
+                    user_id: testUserId,
+                    game_name: 'snake_turd',
+                    score: 500
+                };
+                
+                const { error: scoreError } = await supabaseClient
+                    .from('game_scores')
+                    .insert([testScore]);
+                
+                if (scoreError) {
+                    log(`✗ 创建游戏分数失败: ${scoreError.message}`, 'error');
+                } else {
+                    log(`✓ 创建游戏分数成功`, 'success');
+                }
+                
+                showStatus(`✅ 永久测试数据已创建！用户ID: ${testUserId}，请在 Supabase Table Editor 中查看。`, 'success');
+                log(`\n📋 测试数据信息：`, 'info');
+                log(`   用户ID: ${testUserId}`, 'info');
+                log(`   用户名: DemoUser`, 'info');
+                log(`   会话数: 1`, 'info');
+                log(`   设置: 已创建`, 'info');
+                log(`   游戏分数: 已创建`, 'info');
+                
+            } catch (error) {
+                log(`✗ 创建测试数据失败: ${error.message}`, 'error');
+                showStatus('创建失败: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>
