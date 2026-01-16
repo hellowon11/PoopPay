@@ -12,12 +12,12 @@ const CANVAS_WIDTH = 350;
 const CANVAS_HEIGHT = 500;
 const DEFAULT_PADDLE_WIDTH = 80;
 const PADDLE_HEIGHT = 15;
-const BALL_RADIUS = 6;
+const BALL_RADIUS = 10; // Increased from 6 for better visibility and gameplay
 const BRICK_ROWS = 6;
 const BRICK_COLS = 6;
 
 // DIFFICULTY TWEAKS
-const BASE_SPEED = 3.5; // Increased from 3.0 for faster poop speed
+const BASE_SPEED = 4.2; // Increased for faster poop speed
 const LEVEL_SPEED_INC = 0.05; 
 
 interface Ball {
@@ -64,7 +64,7 @@ interface PowerUp {
     y: number;
     dy: number;
     active: boolean;
-    type: 'MULTI' | 'GROW' | 'LASER' | 'STICKY' | 'BIG';
+    type: 'MULTI' | 'GROW' | 'LASER' | 'STICKY' | 'BIG' | 'SPEED_UP';
 }
 
 export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => {
@@ -75,6 +75,7 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
   const [score, setScore] = useState(0);
   const [level, setLevel] = useState(1);
   const [highScore, setHighScore] = useState(0);
+  const [lives, setLives] = useState(3);
   
   // Game Entities Refs (Mutated for performance)
   const paddleX = useRef(CANVAS_WIDTH / 2 - DEFAULT_PADDLE_WIDTH / 2);
@@ -83,6 +84,7 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
   const laserTimerRef = useRef(0);
   const stickyTimerRef = useRef(0);
   const bigBallTimerRef = useRef(0);
+  const speedUpTimerRef = useRef(0);
   
   const balls = useRef<Ball[]>([]);
   const bullets = useRef<Bullet[]>([]);
@@ -96,6 +98,8 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
   
   // BUG FIX: Lock to prevent multiple level completions
   const isLevelCompleting = useRef(false);
+  // Lock to prevent multiple life loss handling
+  const isLosingLife = useRef(false);
 
   useEffect(() => {
     if (userId) {
@@ -106,6 +110,8 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
   const startGame = () => {
       setScore(0);
       setLevel(1);
+      setLives(3);
+      isLosingLife.current = false; // Reset life loss flag
       startLevel(1);
   };
 
@@ -118,21 +124,25 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
       laserTimerRef.current = 0;
       stickyTimerRef.current = 0;
       bigBallTimerRef.current = 0;
+      speedUpTimerRef.current = 0;
       frameRef.current = 0;
       isLevelCompleting.current = false;
+      isLosingLife.current = false; // Reset life loss flag
       
       speedMultiplierRef.current = 1.0 + ((lvl - 1) * LEVEL_SPEED_INC);
 
       playSound('JUMP');
       
-      // Init Balls
+      // Init Balls - Start attached to paddle, need to tap to launch
+      const ballRadius = BALL_RADIUS;
       balls.current = [{
-          x: CANVAS_WIDTH / 2,
-          y: CANVAS_HEIGHT - 40,
-          dx: BASE_SPEED * speedMultiplierRef.current * (Math.random() > 0.5 ? 1 : -1),
-          dy: -BASE_SPEED * speedMultiplierRef.current,
+          x: paddleX.current + paddleWidthRef.current / 2,
+          y: CANVAS_HEIGHT - PADDLE_HEIGHT - 10 - ballRadius,
+          dx: 0,
+          dy: 0,
           active: true,
-          attached: false,
+          attached: true,
+          attachedOffset: paddleWidthRef.current / 2, // Center of paddle
           isBig: false
       }];
 
@@ -215,16 +225,97 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
       }
   };
 
-  const handleTouch = (e: React.TouchEvent | React.MouseEvent) => {
+  const touchStartRef = useRef<{x: number, y: number} | null>(null);
+  const lastTouchXRef = useRef<number | null>(null);
+  const hasMovedRef = useRef(false);
+  const TAP_THRESHOLD = 5; // Reduced threshold for better responsiveness
+  const MOVE_THRESHOLD = 3; // Lower threshold for smoother movement
+  
+  const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
+      // Don't handle touch events if game is not playing (to allow button clicks)
       if (gameState !== 'PLAYING') return;
       const canvas = canvasRef.current;
       if (!canvas) return;
       
-      // Release Sticky Ball Logic (Only on explicit click/tap, not on touchmove)
-      if (e.type === 'touchstart' || e.type === 'mousedown') {
+      e.preventDefault(); // Prevent default touch behaviors for smoother experience
+      
+      let clientX, clientY;
+      if ('touches' in e) {
+          clientX = e.touches[0].clientX;
+          clientY = e.touches[0].clientY;
+      } else {
+          clientX = (e as React.MouseEvent).clientX;
+          clientY = (e as React.MouseEvent).clientY;
+      }
+      
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = CANVAS_WIDTH / rect.width;
+      const relativeX = (clientX - rect.left) * scaleX;
+      
+      touchStartRef.current = { x: clientX, y: clientY };
+      lastTouchXRef.current = relativeX;
+      hasMovedRef.current = false;
+      
+      // Immediately update paddle position on touch start for instant response
+      let newPaddleX = relativeX - paddleWidthRef.current / 2;
+      newPaddleX = Math.max(0, Math.min(CANVAS_WIDTH - paddleWidthRef.current, newPaddleX));
+      paddleX.current = newPaddleX;
+  };
+  
+  const handleTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
+      if (gameState !== 'PLAYING') return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      
+      e.preventDefault(); // Prevent scrolling and other default behaviors
+      
+      let clientX, clientY;
+      if ('touches' in e) {
+          clientX = e.touches[0].clientX;
+          clientY = e.touches[0].clientY;
+      } else {
+          clientX = (e as React.MouseEvent).clientX;
+          clientY = (e as React.MouseEvent).clientY;
+      }
+      
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = CANVAS_WIDTH / rect.width;
+      const relativeX = (clientX - rect.left) * scaleX;
+      
+      // Calculate movement distance
+      const dx = touchStartRef.current ? clientX - touchStartRef.current.x : 0;
+      const absDx = Math.abs(dx);
+      
+      // If there's any horizontal movement, update paddle position immediately
+      // This makes the paddle follow the finger smoothly
+      if (lastTouchXRef.current !== null) {
+          const moveDistance = Math.abs(relativeX - lastTouchXRef.current);
+          
+          // Update paddle position directly to finger position for instant response
+          let newPaddleX = relativeX - paddleWidthRef.current / 2;
+          newPaddleX = Math.max(0, Math.min(CANVAS_WIDTH - paddleWidthRef.current, newPaddleX));
+          paddleX.current = newPaddleX;
+          
+          // Mark as moved if movement exceeds threshold
+          if (moveDistance > MOVE_THRESHOLD || absDx > TAP_THRESHOLD) {
+              hasMovedRef.current = true;
+          }
+      }
+      
+      lastTouchXRef.current = relativeX;
+  };
+  
+  const handleTouchEnd = (e?: React.TouchEvent | React.MouseEvent) => {
+      if (e) {
+          e.preventDefault();
+      }
+      
+      // Release Sticky Ball Logic (Only on explicit tap, not on drag)
+      // If user didn't move much (it was a tap), release any attached balls
+      if (!hasMovedRef.current && touchStartRef.current) {
           let released = false;
           balls.current.forEach(b => {
-              if (b.attached) {
+              if (b.attached && b.active) {
                   b.attached = false;
                   b.dy = -BASE_SPEED * speedMultiplierRef.current;
                   b.dx = (Math.random() - 0.5) * 4;
@@ -234,23 +325,9 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
           if (released) playSound('THROW');
       }
       
-      // Move Paddle Logic - Only on move events (not on click/tap without movement)
-      // For mobile: only allow sliding, not tapping to move
-      if (e.type === 'touchmove' || e.type === 'mousemove') {
-          const rect = canvas.getBoundingClientRect();
-          let clientX;
-          
-          if ('touches' in e) {
-              clientX = e.touches[0].clientX;
-          } else {
-              clientX = (e as React.MouseEvent).clientX;
-          }
-          
-          const scaleX = CANVAS_WIDTH / rect.width;
-          let relativeX = (clientX - rect.left) * scaleX;
-          relativeX = Math.max(0, Math.min(CANVAS_WIDTH - paddleWidthRef.current, relativeX - paddleWidthRef.current / 2));
-          paddleX.current = relativeX;
-      }
+      touchStartRef.current = null;
+      lastTouchXRef.current = null;
+      hasMovedRef.current = false;
   };
 
   const explodeBrick = (index: number, force: boolean = false) => {
@@ -298,7 +375,7 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
           
           // Powerup Drop (15%)
           if (Math.random() > 0.85) {
-              const types: ('MULTI' | 'GROW' | 'LASER' | 'STICKY' | 'BIG')[] = ['MULTI', 'GROW', 'LASER', 'STICKY', 'BIG'];
+              const types: ('MULTI' | 'GROW' | 'LASER' | 'STICKY' | 'BIG' | 'SPEED_UP')[] = ['MULTI', 'GROW', 'LASER', 'STICKY', 'BIG', 'SPEED_UP'];
               const type = types[Math.floor(Math.random() * types.length)];
               
               powerUps.current.push({
@@ -359,6 +436,9 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
                   balls.current.forEach(b => b.isBig = false);
               }
           }
+          if (speedUpTimerRef.current > 0) {
+              speedUpTimerRef.current--;
+          }
 
           // Lasers
           if (laserTimerRef.current > 0 && frameRef.current % 20 === 0) {
@@ -376,6 +456,7 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
           else if (laserTimerRef.current > 0) paddleColor = '#FF0000'; 
           else if (stickyTimerRef.current > 0) paddleColor = '#9C27B0';
           else if (bigBallTimerRef.current > 0) paddleColor = '#FFD700';
+          else if (speedUpTimerRef.current > 0) paddleColor = '#FF6B00'; // Orange for speed up
 
           ctx.fillStyle = paddleColor;
           ctx.beginPath();
@@ -456,6 +537,7 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
               else if (p.type === 'LASER') { ctx.fillText('🔫', p.x, p.y); }
               else if (p.type === 'STICKY') { ctx.fillText('🧲', p.x, p.y); }
               else if (p.type === 'BIG') { ctx.fillText('🎈', p.x, p.y); }
+              else if (p.type === 'SPEED_UP') { ctx.fillText('⚡', p.x, p.y); }
               else { ctx.fillText('🧪', p.x, p.y); }
 
               const pTop = CANVAS_HEIGHT - PADDLE_HEIGHT - 10;
@@ -479,6 +561,9 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
                   } else if (p.type === 'BIG') {
                       bigBallTimerRef.current = 600;
                       balls.current.forEach(b => b.isBig = true);
+                  } else if (p.type === 'SPEED_UP') {
+                      speedUpTimerRef.current = 600; // 10 seconds at 60fps
+                      playSound('SCORE');
                   }
               }
               if (p.y > CANVAS_HEIGHT) p.active = false;
@@ -493,19 +578,34 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
               const radius = ball.isBig ? BALL_RADIUS * 2.5 : BALL_RADIUS;
 
               if (ball.attached) {
-                  ball.x = paddleX.current + (ball.attachedOffset || 0);
+                  // Always center the ball on the paddle
+                  const currentPaddleWidth = paddleWidthRef.current;
+                  ball.x = paddleX.current + currentPaddleWidth / 2;
                   ball.y = CANVAS_HEIGHT - PADDLE_HEIGHT - 10 - radius;
+                  // Update attachedOffset to match current paddle width
+                  ball.attachedOffset = currentPaddleWidth / 2;
               } else {
-                  ball.x += ball.dx;
-                  ball.y += ball.dy;
+                  // Apply speed up multiplier
+                  const speedMultiplier = speedUpTimerRef.current > 0 ? 1.5 : 1.0;
+                  ball.x += ball.dx * speedMultiplier;
+                  ball.y += ball.dy * speedMultiplier;
 
-                  // Wall
-                  if (ball.x + radius > CANVAS_WIDTH || ball.x - radius < 0) {
-                      ball.dx = -ball.dx;
+                  // Wall Collision - Improved to prevent getting stuck
+                  // Left/Right walls
+                  if (ball.x - radius < 0) {
+                      ball.x = radius; // Push ball away from wall
+                      ball.dx = Math.abs(ball.dx); // Ensure positive direction
+                      playSound('BOUNCE');
+                  } else if (ball.x + radius > CANVAS_WIDTH) {
+                      ball.x = CANVAS_WIDTH - radius; // Push ball away from wall
+                      ball.dx = -Math.abs(ball.dx); // Ensure negative direction
                       playSound('BOUNCE');
                   }
+                  
+                  // Top/Bottom walls
                   if (ball.y - radius < 0) {
-                      ball.dy = -ball.dy;
+                      ball.y = radius; // Push ball away from wall
+                      ball.dy = Math.abs(ball.dy); // Ensure positive direction
                       playSound('BOUNCE');
                   } else if (ball.y + radius > CANVAS_HEIGHT) {
                       ball.active = false;
@@ -550,7 +650,38 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
               ctx.fillText('💩', ball.x, ball.y);
           });
 
-          if (activeBalls === 0) endGame();
+          // Handle ball loss - lose life instead of immediate game over
+          if (activeBalls === 0 && !isLosingLife.current && gameState === 'PLAYING') {
+              isLosingLife.current = true; // Prevent multiple triggers
+              setLives(prevLives => {
+                  const newLives = prevLives - 1;
+                  if (newLives <= 0) {
+                      endGame();
+                      isLosingLife.current = false;
+                      return 0;
+                  } else {
+                      // Respawn ball after losing a life - Attached to paddle, need to tap to launch
+                      setTimeout(() => {
+                          if (gameState === 'PLAYING') {
+                              const ballRadius = bigBallTimerRef.current > 0 ? BALL_RADIUS * 2.5 : BALL_RADIUS;
+                              balls.current = [{
+                                  x: paddleX.current + paddleWidthRef.current / 2,
+                                  y: CANVAS_HEIGHT - PADDLE_HEIGHT - 10 - ballRadius,
+                                  dx: 0,
+                                  dy: 0,
+                                  active: true,
+                                  attached: true,
+                                  attachedOffset: paddleWidthRef.current / 2, // Center of paddle
+                                  isBig: bigBallTimerRef.current > 0
+                              }];
+                              playSound('JUMP');
+                              isLosingLife.current = false; // Reset flag after respawn
+                          }
+                      }, 500); // Brief pause before respawn
+                      return newLives;
+                  }
+              });
+          }
 
           particles.current.forEach(p => {
               p.x += p.dx; p.y += p.dy; p.dy += 0.2; p.life -= 0.05;
@@ -594,22 +725,56 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
             <div className="text-right leading-tight">
                  <div className="text-xs text-gray-500 font-bold">HIGH: {highScore}</div>
                  <div className="font-black text-xl text-brand-blue">SCORE: {score}</div>
+                 <div className="flex items-center justify-end gap-1 mt-1">
+                     {Array.from({length: 3}).map((_, i) => (
+                         <span key={i} className={`text-lg transition-all ${i < lives ? 'scale-100' : 'scale-75 opacity-30 grayscale'}`}>
+                             ❤️
+                         </span>
+                     ))}
+                 </div>
             </div>
         </div>
 
         <div 
             className="relative bg-blue-100 border-4 border-black rounded-lg overflow-hidden mx-auto touch-none"
-            style={{ width: `${CANVAS_WIDTH}px`, height: `${CANVAS_HEIGHT}px`, maxWidth: '100%' }}
-            onTouchMove={handleTouch}
-            onMouseDown={handleTouch}
-            onTouchStart={handleTouch}
-            onMouseMove={handleTouch}
+            style={{ 
+                width: `${CANVAS_WIDTH}px`, 
+                height: `${CANVAS_HEIGHT}px`, 
+                maxWidth: '100%',
+                touchAction: gameState === 'PLAYING' ? 'none' : 'auto',
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
+                WebkitTapHighlightColor: 'transparent'
+            }}
+            onTouchStart={gameState === 'PLAYING' ? handleTouchStart : undefined}
+            onTouchMove={gameState === 'PLAYING' ? handleTouchMove : undefined}
+            onTouchEnd={gameState === 'PLAYING' ? handleTouchEnd : undefined}
+            onMouseDown={gameState === 'PLAYING' ? handleTouchStart : undefined}
+            onMouseMove={gameState === 'PLAYING' ? handleTouchMove : undefined}
+            onMouseUp={gameState === 'PLAYING' ? handleTouchEnd : undefined}
+            onMouseLeave={gameState === 'PLAYING' ? handleTouchEnd : undefined}
+            onContextMenu={(e) => e.preventDefault()}
+            onSelectStart={(e) => e.preventDefault()}
         >
             <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full block" />
             
             {gameState !== 'PLAYING' && (
-                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                     <div className="bg-white p-6 rounded-xl border-4 border-black text-center shadow-lg w-3/4">
+                <div 
+                    className="absolute inset-0 bg-black/50 flex items-center justify-center"
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onTouchMove={(e) => e.stopPropagation()}
+                    onTouchEnd={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ pointerEvents: 'auto' }}
+                >
+                     <div 
+                         className="bg-white p-6 rounded-xl border-4 border-black text-center shadow-lg w-3/4"
+                         onTouchStart={(e) => e.stopPropagation()}
+                         onTouchMove={(e) => e.stopPropagation()}
+                         onTouchEnd={(e) => e.stopPropagation()}
+                         onClick={(e) => e.stopPropagation()}
+                     >
                          <div className="text-5xl mb-2">
                              {gameState === 'GAME_OVER' ? '🚽' : (gameState === 'LEVEL_COMPLETE' ? '🏆' : '💩')}
                          </div>
@@ -622,6 +787,7 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
                                  <div>💥 Break the walls</div>
                                  <div>🧲 New: Sticky Paddle</div>
                                  <div>🎈 New: Big Ball</div>
+                                 <div>⚡ New: Speed Up</div>
                              </div>
                          )}
                          
@@ -632,14 +798,20 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
                              </div>
                          )}
 
-                         <Button onClick={gameState === 'LEVEL_COMPLETE' ? goToNextLevel : startGame} fullWidth>
+                         <Button 
+                             onClick={gameState === 'LEVEL_COMPLETE' ? goToNextLevel : startGame} 
+                             fullWidth
+                             onTouchStart={(e) => e.stopPropagation()}
+                             onTouchEnd={(e) => e.stopPropagation()}
+                             style={{ touchAction: 'manipulation' }}
+                         >
                              {gameState === 'START' ? 'LAUNCH POOP' : (gameState === 'LEVEL_COMPLETE' ? 'NEXT LEVEL' : 'TRY AGAIN')}
                          </Button>
                      </div>
                 </div>
             )}
         </div>
-        <p className="text-center text-xs text-gray-400 mt-2 font-bold">Drag to move. Tap to release sticky ball.</p>
+        <p className="text-center text-xs text-gray-400 mt-2 font-bold">Swipe left/right to move. Tap to release sticky ball.</p>
       </div>
     </div>
   );

@@ -155,11 +155,12 @@ export const SnakeGame: React.FC<SnakeGameProps> = ({ onClose, userId }) => {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [handleKeyPress]);
 
-  // Touch Handling for Mobile - Swipe Control
+  // Touch Handling for Mobile - Swipe Control (Better for mobile)
   const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
     touchStartRef.current = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY
+      x: touch.clientX,
+      y: touch.clientY
     };
   };
 
@@ -191,17 +192,17 @@ export const SnakeGame: React.FC<SnakeGameProps> = ({ onClose, userId }) => {
         // Vertical
         if (dy > 0) inputDir = 'DOWN';
         else inputDir = 'UP';
-      }
+    }
 
-      // Apply Reverse Logic to Touch
-      if (reversedControls > 0 && inputDir) {
-          if (inputDir === 'UP') inputDir = 'DOWN';
-          else if (inputDir === 'DOWN') inputDir = 'UP';
-          else if (inputDir === 'LEFT') inputDir = 'RIGHT';
-          else if (inputDir === 'RIGHT') inputDir = 'LEFT';
-      }
+    // Apply Reverse Logic to Touch
+    if (reversedControls > 0 && inputDir) {
+        if (inputDir === 'UP') inputDir = 'DOWN';
+        else if (inputDir === 'DOWN') inputDir = 'UP';
+        else if (inputDir === 'LEFT') inputDir = 'RIGHT';
+        else if (inputDir === 'RIGHT') inputDir = 'LEFT';
+    }
 
-      // Apply Direction
+    // Apply Direction
       if (inputDir === 'RIGHT' && currentDir !== 'LEFT') {
         setDirection('RIGHT');
         touchStartRef.current = currentTouch; // Update start position for continuous swipe
@@ -285,11 +286,11 @@ export const SnakeGame: React.FC<SnakeGameProps> = ({ onClose, userId }) => {
           case 'RIGHT': head.x += 1; break;
         }
 
-        // Check Wall Collision
-        if (head.x < 0 || head.x >= GRID_SIZE || head.y < 0 || head.y >= GRID_SIZE) {
-          setGameOver(true);
-          return prevSnake;
-        }
+        // Wrap around walls instead of dying
+        if (head.x < 0) head.x = GRID_SIZE - 1;
+        if (head.x >= GRID_SIZE) head.x = 0;
+        if (head.y < 0) head.y = GRID_SIZE - 1;
+        if (head.y >= GRID_SIZE) head.y = 0;
 
         // Check Self Collision
         if (prevSnake.some(segment => segment.x === head.x && segment.y === head.y)) {
@@ -371,7 +372,7 @@ export const SnakeGame: React.FC<SnakeGameProps> = ({ onClose, userId }) => {
     };
 
     if (!isPaused && !gameOver) {
-      moveInterval.current = setInterval(moveSnake, currentSpeed);
+    moveInterval.current = setInterval(moveSnake, currentSpeed);
     } else {
       if (moveInterval.current) clearInterval(moveInterval.current);
     }
@@ -379,6 +380,31 @@ export const SnakeGame: React.FC<SnakeGameProps> = ({ onClose, userId }) => {
       if (moveInterval.current) clearInterval(moveInterval.current);
     };
   }, [direction, food, bonusItems, gameOver, score, highScore, userId, currentSpeed, chiliTime, mode, reversedControls, isPaused]);
+
+  // Prevent page scroll when game is active - MUST be before early return
+  const isPlaying = mode !== 'MENU' && !gameOver && !isPaused;
+  useEffect(() => {
+    if (isPlaying) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      document.body.style.height = '100%';
+      // Prevent text selection and context menu
+      document.addEventListener('contextmenu', (e) => e.preventDefault());
+      document.addEventListener('selectstart', (e) => e.preventDefault());
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.height = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.height = '';
+    };
+  }, [isPlaying]);
 
   if (mode === 'MENU') {
       return (
@@ -405,7 +431,14 @@ export const SnakeGame: React.FC<SnakeGameProps> = ({ onClose, userId }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+    <div 
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+      style={{ 
+        touchAction: 'none',
+        overscrollBehavior: 'none',
+        WebkitOverflowScrolling: 'touch'
+      }}
+    >
       <div className={`bg-brand-cream rounded-2xl p-4 w-full max-w-sm border-4 transition-colors duration-500 relative ${reversedControls > 0 ? 'border-purple-500 bg-purple-50' : 'border-black'}`}>
         <div className="absolute -top-4 right-0 flex gap-2 z-10">
           {!gameOver && (
@@ -459,11 +492,18 @@ export const SnakeGame: React.FC<SnakeGameProps> = ({ onClose, userId }) => {
                 display: 'grid',
                 gridTemplateColumns: `repeat(${GRID_SIZE}, 1fr)`,
                 gridTemplateRows: `repeat(${GRID_SIZE}, 1fr)`,
-                filter: reversedControls > 0 ? 'hue-rotate(90deg)' : 'none'
+                filter: reversedControls > 0 ? 'hue-rotate(90deg)' : 'none',
+                touchAction: 'none',
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
+                WebkitTapHighlightColor: 'transparent'
             }}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
+            onContextMenu={(e) => e.preventDefault()}
+            onSelectStart={(e) => e.preventDefault()}
         >
            {gameOver && (
                <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">

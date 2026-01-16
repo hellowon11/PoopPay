@@ -44,6 +44,28 @@
         background-color: #FFFDD0; /* Cream background */
         touch-action: manipulation;
         overscroll-behavior: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+      }
+      /* Prevent text selection and magnifier on all elements */
+      * {
+        -webkit-user-select: none !important;
+        -moz-user-select: none !important;
+        -ms-user-select: none !important;
+        user-select: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+        -webkit-touch-callout: none !important;
+      }
+      /* Allow text selection only for input and textarea */
+      input, textarea {
+        -webkit-user-select: text !important;
+        -moz-user-select: text !important;
+        -ms-user-select: text !important;
+        user-select: text !important;
       }
       /* Custom Scrollbar for a polished feel */
       ::-webkit-scrollbar {

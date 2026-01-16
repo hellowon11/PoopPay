@@ -161,20 +161,86 @@ export const DoodlePoop: React.FC<DoodlePoopProps> = ({ onClose, userId }) => {
           else if (rand > 0.93) hasItem = 'SHIELD';
       }
 
-      // Enemy Spawning
-      if (difficulty > 800 && Math.random() > 0.93) {
-          const isBlackHole = difficulty > 2000 && Math.random() > 0.8;
+      // Enemy Spawning - Improved logic for better gameplay with increased frequency at higher difficulty
+      // Base spawn chance increases with difficulty
+      let spawnChance = 0.93;
+      if (difficulty > 2000) spawnChance = 0.88; // More frequent at high difficulty
+      if (difficulty > 3000) spawnChance = 0.83; // Even more frequent at very high difficulty
+      if (difficulty > 4000) spawnChance = 0.78; // Very frequent at extreme difficulty
+      
+      if (difficulty > 800 && Math.random() > spawnChance) {
+          // Reduced black hole spawn rate and only at very high difficulty
+          const isBlackHole = difficulty > 2500 && Math.random() > 0.85; // Only spawn at very high difficulty, less frequent
           const isPlunger = difficulty > 1500 && Math.random() > 0.6; // Vertical moving enemy
           
           let enemyType: 'FLY' | 'BLACK_HOLE' | 'PLUNGER' = 'FLY';
           if (isBlackHole) enemyType = 'BLACK_HOLE';
           else if (isPlunger) enemyType = 'PLUNGER';
 
+          const platformCenterX = x + w / 2;
+          const platformLeft = x;
+          const platformRight = x + w;
+          let enemyX = Math.random() * (CANVAS_WIDTH - 40);
+          let enemyY = yPos - 80 - Math.random() * 50;
+          
+          // For black holes, ensure they spawn in safe positions
+          if (enemyType === 'BLACK_HOLE') {
+              // Always spawn black holes on the sides, never blocking the platform directly
+              // Spawn on left side (20% of screen width) or right side (20% of screen width)
+              const side = Math.random() > 0.5;
+              if (side) {
+                  // Left side
+                  enemyX = Math.random() * (CANVAS_WIDTH * 0.2);
+              } else {
+                  // Right side
+                  enemyX = CANVAS_WIDTH * 0.8 + Math.random() * (CANVAS_WIDTH * 0.2 - 40);
+              }
+              
+              // Ensure minimum distance from platform edges
+              const minDistance = 80;
+              if (enemyX < platformRight + minDistance && enemyX + 40 > platformLeft - minDistance) {
+                  // Too close to platform, move to opposite side
+                  if (enemyX < CANVAS_WIDTH / 2) {
+                      enemyX = CANVAS_WIDTH * 0.8 + Math.random() * (CANVAS_WIDTH * 0.2 - 40);
+                  } else {
+                      enemyX = Math.random() * (CANVAS_WIDTH * 0.2);
+                  }
+              }
+          } else if (enemyType === 'FLY' || enemyType === 'PLUNGER') {
+              // For flies and plungers, spawn them in positions that don't directly block the platform
+              // Prefer spawning on the sides or above the platform, but not directly on it
+              const spawnZone = Math.random();
+              
+              if (spawnZone < 0.3) {
+                  // Left side (30% chance)
+                  enemyX = Math.random() * Math.max(0, platformLeft - 40);
+              } else if (spawnZone < 0.6) {
+                  // Right side (30% chance)
+                  enemyX = Math.min(CANVAS_WIDTH - 40, platformRight + 20) + Math.random() * (CANVAS_WIDTH - Math.min(CANVAS_WIDTH - 40, platformRight + 20) - 40);
+              } else {
+                  // Above platform but offset (40% chance)
+                  const offset = (Math.random() - 0.5) * 60; // Random offset from center
+                  enemyX = platformCenterX + offset;
+                  // Clamp to screen bounds
+                  enemyX = Math.max(20, Math.min(CANVAS_WIDTH - 60, enemyX));
+                  
+                  // Ensure it's not directly on the platform
+                  if (enemyX >= platformLeft - 20 && enemyX <= platformRight + 20) {
+                      // Too close, move to side
+                      if (enemyX < platformCenterX) {
+                          enemyX = Math.max(20, platformLeft - 40 - Math.random() * 20);
+                      } else {
+                          enemyX = Math.min(CANVAS_WIDTH - 60, platformRight + 20 + Math.random() * 20);
+                      }
+                  }
+              }
+          }
+
           enemies.current.push({
               id: Math.random(),
-              x: Math.random() * (CANVAS_WIDTH - 40),
-              y: yPos - 80 - Math.random() * 50,
-              startY: yPos - 80 - Math.random() * 50,
+              x: enemyX,
+              y: enemyY,
+              startY: enemyY,
               type: enemyType,
               vx: enemyType === 'BLACK_HOLE' ? 0 : (Math.random() > 0.5 ? 1.5 : -1.5),
               vy: enemyType === 'PLUNGER' ? 2 : 0,
@@ -217,35 +283,74 @@ export const DoodlePoop: React.FC<DoodlePoopProps> = ({ onClose, userId }) => {
       }
   };
 
-  // Input Handling
+  // Input Handling - Mobile swipe for one-handed control
+  const touchStartRef = useRef<{x: number, y: number} | null>(null);
+  
   const handleTouchStart = (e: React.TouchEvent) => {
-      const rect = e.currentTarget.getBoundingClientRect();
       const t = e.touches[0];
-      const x = t.clientX - rect.left;
-      const y = t.clientY - rect.top;
+      touchStartRef.current = { x: t.clientX, y: t.clientY };
+  };
+  
+  const handleTouchMove = (e: React.TouchEvent) => {
+      if (!touchStartRef.current) return;
+      e.preventDefault();
       
-      handleInput(x, y, rect.width, rect.height);
+      const t = e.touches[0];
+      const dx = t.clientX - touchStartRef.current.x;
+      const dy = t.clientY - touchStartRef.current.y;
+      
+      // Swipe up = shoot
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 30 && dy < 0) {
+          // Upward swipe detected - shoot
+          shootProjectile();
+          touchStartRef.current = { x: t.clientX, y: t.clientY }; // Reset start position to prevent multiple shots
+          return;
+      }
+      
+      // Swipe right = jump right, Swipe left = jump left
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 20) {
+          if (dx > 0) {
+              // Swipe right - jump right
+              inputState.current.right = true;
+              inputState.current.left = false;
+          } else {
+              // Swipe left - jump left
+              inputState.current.left = true;
+              inputState.current.right = false;
+          }
+      }
+  };
+  
+  const handleTouchEnd = () => {
+      touchStartRef.current = null;
+      inputState.current.left = false;
+      inputState.current.right = false;
   };
   
   const handleMouseDown = (e: React.MouseEvent) => {
       const rect = e.currentTarget.getBoundingClientRect();
-      handleInput(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
-  };
-
-  const handleInput = (x: number, y: number, width: number, height: number) => {
-      // Shooting Zone (Top 40%)
-      if (y < height * 0.4) {
-          shootProjectile();
-          return;
-      }
-
-      // Movement Zones (Bottom 60%)
-      if (x < width / 2) {
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      
+      // Movement Zones (Full screen for mouse - no shooting zone)
+      if (x < rect.width / 2) {
           inputState.current.left = true;
           inputState.current.right = false;
       } else {
           inputState.current.right = true;
           inputState.current.left = false;
+      }
+  };
+  
+  const handleMouseMove = (e: React.MouseEvent) => {
+      // For desktop, we can detect upward mouse movement for shooting
+      if (e.buttons === 1) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const y = e.clientY - rect.top;
+          // If mouse is in top 30% and moving up, shoot
+          if (y < rect.height * 0.3) {
+              shootProjectile();
+          }
       }
   };
   
@@ -668,25 +773,25 @@ export const DoodlePoop: React.FC<DoodlePoopProps> = ({ onClose, userId }) => {
 
           ctx.restore(); // End camera transform
 
-          // HUD
+          // HUD - Moved right for mobile visibility
           ctx.fillStyle = 'black';
           ctx.font = '900 24px Fredoka';
-          ctx.fillText(`${Math.floor(maxScore.current)}`, 10, 30);
+          ctx.fillText(`${Math.floor(maxScore.current)}`, CANVAS_WIDTH - 100, 30);
           
           if (player.current.rocketTimer > 0) {
               ctx.fillStyle = 'red';
               ctx.font = 'bold 20px Fredoka';
-              ctx.fillText("FART TURBO!", 10, 60);
+              ctx.fillText("FART TURBO!", CANVAS_WIDTH - 120, 60);
           }
           if (player.current.propellerTimer > 0) {
               ctx.fillStyle = 'blue';
               ctx.font = 'bold 20px Fredoka';
-              ctx.fillText("PROPELLER", 10, 60);
+              ctx.fillText("PROPELLER", CANVAS_WIDTH - 120, 60);
           }
           if (player.current.hasShield) {
               ctx.fillStyle = 'cyan';
               ctx.font = 'bold 20px Fredoka';
-              ctx.fillText("SHIELD", 10, player.current.rocketTimer > 0 || player.current.propellerTimer > 0 ? 85 : 60);
+              ctx.fillText("SHIELD", CANVAS_WIDTH - 100, player.current.rocketTimer > 0 || player.current.propellerTimer > 0 ? 85 : 60);
           }
 
           rafRef.current = requestAnimationFrame(loop);
@@ -721,11 +826,22 @@ export const DoodlePoop: React.FC<DoodlePoopProps> = ({ onClose, userId }) => {
 
          <div 
             className="flex-1 bg-[#f0f8ff] border-4 border-black relative rounded-lg overflow-hidden touch-none select-none"
+            style={{
+              touchAction: 'none',
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              userSelect: 'none',
+              WebkitTapHighlightColor: 'transparent'
+            }}
             onTouchStart={handleTouchStart}
-            onTouchEnd={clearInput}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
             onMouseUp={clearInput}
             onMouseLeave={clearInput}
+            onContextMenu={(e) => e.preventDefault()}
+            onSelectStart={(e) => e.preventDefault()}
          >
              <canvas ref={canvasRef} width={CANVAS_WIDTH} height={CANVAS_HEIGHT} className="w-full h-full block object-cover" />
              
@@ -747,7 +863,7 @@ export const DoodlePoop: React.FC<DoodlePoopProps> = ({ onClose, userId }) => {
                  <>
                     {/* Shoot Zone Hint */}
                     <div className="absolute top-4 left-0 right-0 flex justify-center pointer-events-none opacity-30">
-                         <span className="bg-black text-white px-2 py-1 rounded text-[10px] font-bold">TAP TOP TO SHOOT</span>
+                         <span className="bg-black text-white px-2 py-1 rounded text-[10px] font-bold">SWIPE UP TO SHOOT</span>
                     </div>
                     {/* Move Zone Hint */}
                     {maxScore.current < 20 && (

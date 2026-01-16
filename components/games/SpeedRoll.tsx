@@ -265,6 +265,13 @@ export const SpeedRoll: React.FC<SpeedRollProps> = ({ onClose, userId }) => {
          {/* Game Area */}
          <div 
             className="flex-1 w-full flex flex-col items-center justify-start relative touch-none select-none bg-white/50 rounded-xl border-2 border-black/10"
+            style={{
+              touchAction: 'none',
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              userSelect: 'none',
+              WebkitTapHighlightColor: 'transparent'
+            }}
             onTouchStart={(e) => handleInputStart(e.touches[0].clientY)}
             onTouchMove={(e) => handleInputMove(e.touches[0].clientY)}
             onTouchEnd={handleInputEnd}
@@ -272,6 +279,8 @@ export const SpeedRoll: React.FC<SpeedRollProps> = ({ onClose, userId }) => {
             onMouseMove={(e) => e.buttons === 1 && handleInputMove(e.clientY)}
             onMouseUp={handleInputEnd}
             onMouseLeave={handleInputEnd}
+            onContextMenu={(e) => e.preventDefault()}
+            onSelectStart={(e) => e.preventDefault()}
          >
              <canvas ref={canvasRef} width={300} height={500} className="w-full h-full block" />
 

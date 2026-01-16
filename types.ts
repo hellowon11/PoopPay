@@ -114,7 +114,7 @@ export const BRISTOL_SCALE = [
   { 
     type: 5, 
     label: "Soft", 
-    emoji: "🗿", 
+    emoji: "🐥", 
     variations: [
         { title: "Lacking Fiber", desc: "Eat some oats.", foodEmoji: "🌾", foodName: "Oats" }
     ]

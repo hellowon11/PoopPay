@@ -23,7 +23,7 @@ export const userService = {
   async register(username: string): Promise<User | null> {
     try {
       // Generate a simple ID
-      const id = Math.random().toString(36).substring(2, 10).toUpperCase();
+    const id = Math.random().toString(36).substring(2, 10).toUpperCase();
       
       const { data, error } = await supabase
         .from(TABLES.USERS)
@@ -145,10 +145,10 @@ export const sessionService = {
 
   async getLeaderboard(period: 'weekly' | 'monthly' | 'all'): Promise<LeaderboardEntry[]> {
     try {
-      const now = new Date();
-      const cutoff = new Date();
+    const now = new Date();
+    const cutoff = new Date();
       
-      if (period === 'weekly') cutoff.setDate(now.getDate() - 7);
+    if (period === 'weekly') cutoff.setDate(now.getDate() - 7);
       else if (period === 'monthly') cutoff.setDate(now.getDate() - 30);
       else cutoff.setFullYear(2000); // All time
 
@@ -178,21 +178,21 @@ export const sessionService = {
       const userMap = new Map(users?.map(u => [u.id, u.username]) || []);
 
       // Aggregate by user
-      const agg: Record<string, LeaderboardEntry> = {};
+    const agg: Record<string, LeaderboardEntry> = {};
 
       sessions?.forEach(s => {
         const uid = s.user_id || 'unknown';
         const username = userMap.get(uid) || 'Unknown Pooper';
         
         if (!agg[uid]) {
-          agg[uid] = { username, total_duration: 0, total_earnings: 0, session_count: 0 };
+            agg[uid] = { username, total_duration: 0, total_earnings: 0, session_count: 0 };
         }
         agg[uid].total_duration += s.durationSeconds || 0;
         agg[uid].total_earnings += s.earnings || 0;
         agg[uid].session_count += 1;
-      });
+    });
 
-      return Object.values(agg)
+    return Object.values(agg)
         .sort((a, b) => b.total_earnings - a.total_earnings)
         .slice(0, 10);
     } catch (error) {
@@ -299,7 +299,7 @@ export const gameService = {
         .eq('user_id', userId)
         .eq('game_name', gameName)
         .single();
-
+    
       if (error || !data) {
         return 0;
       }

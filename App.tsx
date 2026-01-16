@@ -56,13 +56,33 @@ const ACHIEVEMENTS_LIST: Achievement[] = [
   { id: 'first_drop', title: 'First Drop', description: 'Logged your very first session.', icon: '👶', condition: (history) => history.length >= 1 },
   { id: 'regular', title: 'The Regular', description: 'Logged 5 sessions.', icon: '📅', condition: (history) => history.length >= 5 },
   { id: 'veteran', title: 'Veteran Pooper', description: 'Logged 20 sessions.', icon: '🎖️', condition: (history) => history.length >= 20 },
+  { id: 'master', title: 'Master Pooper', description: 'Logged 50 sessions.', icon: '👑', condition: (history) => history.length >= 50 },
+  { id: 'legend', title: 'Legend', description: 'Logged 100 sessions.', icon: '🌟', condition: (history) => history.length >= 100 },
   { id: 'speed_demon', title: 'Speed Demon', description: 'Finished in under 2 mins.', icon: '⚡', condition: (history) => history.some(s => s.durationSeconds < 120 && s.durationSeconds > 10) },
   { id: 'the_thinker', title: 'The Thinker', description: 'Spent over 20 mins.', icon: '🤔', condition: (history) => history.some(s => s.durationSeconds > 1200) },
   { id: 'marathon', title: 'Marathon', description: 'Total time > 5 hours.', icon: '⏳', condition: (history) => history.reduce((acc, curr) => acc + curr.durationSeconds, 0) > 18000 },
   { id: 'snake_charmer', title: 'Snake Charmer', description: 'Logged a "Perfect Snake".', icon: '🐍', condition: (history) => history.some(s => s.poop_type === 4) },
   { id: 'liquid_assets', title: 'Liquid Assets', description: 'Logged a "The Soup".', icon: '🌊', condition: (history) => history.some(s => s.poop_type === 7) },
+  { id: 'hard_worker', title: 'Hard Worker', description: 'Logged a "Hard" type.', icon: '⚫', condition: (history) => history.some(s => s.poop_type === 1) },
+  { id: 'soft_chicken', title: 'Soft Chicken', description: 'Logged a "Soft" type.', icon: '🐥', condition: (history) => history.some(s => s.poop_type === 5) },
   { id: 'morning_glory', title: 'Morning Glory', description: 'Pooped before 9 AM.', icon: '🌅', condition: (history) => history.some(s => { const d = new Date(s.startTime); return d.getHours() < 9 && d.getHours() >= 4; }) },
-  { id: 'night_owl', title: 'Night Owl', description: 'Pooped after 8 PM.', icon: '🦉', condition: (history) => history.some(s => { const d = new Date(s.startTime); return d.getHours() >= 20; }) }
+  { id: 'night_owl', title: 'Night Owl', description: 'Pooped after 8 PM.', icon: '🦉', condition: (history) => history.some(s => { const d = new Date(s.startTime); return d.getHours() >= 20; }) },
+  { id: 'lunch_break', title: 'Lunch Break', description: 'Pooped between 12-2 PM.', icon: '🍽️', condition: (history) => history.some(s => { const d = new Date(s.startTime); return d.getHours() >= 12 && d.getHours() < 14; }) },
+  { id: 'rich_pooper', title: 'Rich Pooper', description: 'Earned over 100 in one session.', icon: '💰', condition: (history) => history.some(s => s.earnings >= 100) },
+  { id: 'consistency', title: 'Consistency King', description: '7 day streak.', icon: '🔥', condition: (history) => {
+    const days = Array.from(new Set(history.map(s => new Date(s.startTime).toDateString()))).sort();
+    if (days.length < 7) return false;
+    let streak = 1;
+    for (let i = days.length - 2; i >= 0; i--) {
+      const curr = new Date(days[i]);
+      const next = new Date(days[i+1]);
+      const diff = (next.getTime() - curr.getTime()) / (1000 * 3600 * 24);
+      if (diff >= 0.9 && diff <= 1.1) streak++;
+      else break;
+    }
+    return streak >= 7;
+  }},
+  { id: 'weekend_warrior', title: 'Weekend Warrior', description: 'Pooped on weekend.', icon: '🎮', condition: (history) => history.some(s => { const d = new Date(s.startTime); return d.getDay() === 0 || d.getDay() === 6; }) }
 ];
 
 // --- HARDCODED "AI" LOGIC ---
@@ -83,6 +103,200 @@ const safeParse = <T,>(key: string): T | null => {
         return null;
     }
 }
+
+// POOP HIT ANIMATION COMPONENT - Funny multiple poops falling with screen crack effect
+const PoopHitAnimation = ({ visible }: { visible: boolean }) => {
+    const [showCrack, setShowCrack] = useState(false);
+    
+    useEffect(() => {
+        if (visible) {
+            // Show crack effect after poops start hitting
+            const crackTimer = setTimeout(() => {
+                setShowCrack(true);
+            }, 800);
+            return () => clearTimeout(crackTimer);
+        } else {
+            setShowCrack(false);
+        }
+    }, [visible]);
+    
+    if (!visible) return null;
+    
+    const poops = Array.from({ length: 35 }, (_, i) => ({
+        id: i,
+        delay: i * 0.04,
+        x: Math.random() * 100,
+        size: Math.random() * 100 + 70,
+        rotation: Math.random() * 720,
+        speed: Math.random() * 0.3 + 0.7,
+        impactX: Math.random() * 100,
+        impactY: 40 + Math.random() * 40 // Impact around middle of screen
+    }));
+    
+    // Generate crack lines
+    const cracks = Array.from({ length: 12 }, (_, i) => ({
+        id: i,
+        startX: 50 + (Math.random() - 0.5) * 20,
+        startY: 50 + (Math.random() - 0.5) * 20,
+        angle: Math.random() * 360,
+        length: 20 + Math.random() * 30,
+        delay: 0.8 + i * 0.05
+    }));
+    
+    return (
+        <div className="fixed inset-0 z-[200] pointer-events-none overflow-hidden">
+            {/* Poops falling and hitting screen */}
+            {poops.map((poop) => (
+                <div
+                    key={poop.id}
+                    className="absolute"
+                    style={{
+                        left: `${poop.x}%`,
+                        top: '-100px',
+                        animationDelay: `${poop.delay}s`,
+                        animation: `poopFall${poop.id} ${1.5 * poop.speed}s cubic-bezier(0.4, 0, 0.2, 1) forwards`
+                    }}
+                >
+                    <div
+                        className="text-7xl"
+                        style={{
+                            fontSize: `${poop.size}px`,
+                            animation: `poopSpin${poop.id} ${1.5 * poop.speed}s linear forwards`
+                        }}
+                    >
+                        💩
+                    </div>
+                    {/* Impact splatter effect */}
+                    <div
+                        className="absolute text-8xl opacity-0"
+                        style={{
+                            left: '50%',
+                            top: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            animationDelay: `${poop.delay + 0.5 * poop.speed}s`,
+                            animation: `splatter${poop.id} 0.3s ease-out forwards`
+                        }}
+                    >
+                        💥
+                    </div>
+                </div>
+            ))}
+            
+            {/* Screen crack effect */}
+            {showCrack && (
+                <div className="absolute inset-0">
+                    {cracks.map((crack) => (
+                        <div
+                            key={crack.id}
+                            className="absolute"
+                            style={{
+                                left: `${crack.startX}%`,
+                                top: `${crack.startY}%`,
+                                width: '2px',
+                                height: `${crack.length}%`,
+                                background: 'linear-gradient(to bottom, rgba(0,0,0,0.8), rgba(0,0,0,0.3))',
+                                transformOrigin: 'top center',
+                                transform: `rotate(${crack.angle}deg)`,
+                                animationDelay: `${crack.delay}s`,
+                                animation: `crackExpand${crack.id} 0.5s ease-out forwards`,
+                                boxShadow: '0 0 10px rgba(0,0,0,0.5)'
+                            }}
+                        />
+                    ))}
+                    {/* Screen shake effect */}
+                    <div 
+                        className="absolute inset-0"
+                        style={{
+                            animation: 'screenShake 0.5s ease-out',
+                            animationDelay: '0.8s'
+                        }}
+                    />
+                </div>
+            )}
+            
+            <style>{`
+                ${poops.map((poop, i) => `
+                    @keyframes poopFall${i} {
+                        0% {
+                            transform: translateY(0) translateX(0) rotate(0deg) scale(0.3);
+                            opacity: 1;
+                        }
+                        30% {
+                            transform: translateY(${poop.impactY * 0.3}vh) translateX(${(Math.random() - 0.5) * 50}px) rotate(${poop.rotation * 0.2}deg) scale(1.1);
+                            opacity: 1;
+                        }
+                        60% {
+                            transform: translateY(${poop.impactY * 0.6}vh) translateX(${(Math.random() - 0.5) * 30}px) rotate(${poop.rotation * 0.4}deg) scale(1.3);
+                            opacity: 1;
+                        }
+                        85% {
+                            transform: translateY(${poop.impactY}vh) translateX(${(Math.random() - 0.5) * 20}px) rotate(${poop.rotation * 0.7}deg) scale(1.5);
+                            opacity: 1;
+                        }
+                        90% {
+                            transform: translateY(${poop.impactY}vh) translateX(${(Math.random() - 0.5) * 10}px) rotate(${poop.rotation}deg) scale(1.2);
+                            opacity: 0.9;
+                        }
+                        100% {
+                            transform: translateY(${poop.impactY + 10}vh) translateX(${(Math.random() - 0.5) * 5}px) rotate(${poop.rotation}deg) scale(0.8);
+                            opacity: 0.3;
+                        }
+                    }
+                    @keyframes poopSpin${i} {
+                        0% { transform: rotate(0deg) scale(0.3); }
+                        15% { transform: rotate(180deg) scale(1.1); }
+                        30% { transform: rotate(360deg) scale(1.2); }
+                        60% { transform: rotate(540deg) scale(1.4); }
+                        85% { transform: rotate(720deg) scale(1.5); }
+                        90% { transform: rotate(${poop.rotation}deg) scale(1.2); }
+                        100% { transform: rotate(${poop.rotation}deg) scale(0.8); }
+                    }
+                    @keyframes splatter${i} {
+                        0% {
+                            transform: translate(-50%, -50%) scale(0) rotate(0deg);
+                            opacity: 0;
+                        }
+                        50% {
+                            transform: translate(-50%, -50%) scale(2) rotate(180deg);
+                            opacity: 1;
+                        }
+                        100% {
+                            transform: translate(-50%, -50%) scale(3) rotate(360deg);
+                            opacity: 0;
+                        }
+                    }
+                `).join('')}
+                ${cracks.map((crack, i) => `
+                    @keyframes crackExpand${i} {
+                        0% {
+                            height: 0%;
+                            opacity: 0;
+                        }
+                        50% {
+                            opacity: 1;
+                        }
+                        100% {
+                            height: ${crack.length}%;
+                            opacity: 0.8;
+                        }
+                    }
+                `).join('')}
+                @keyframes screenShake {
+                    0%, 100% { transform: translate(0, 0); }
+                    10% { transform: translate(-5px, -3px) rotate(-0.5deg); }
+                    20% { transform: translate(5px, 3px) rotate(0.5deg); }
+                    30% { transform: translate(-4px, 2px) rotate(-0.3deg); }
+                    40% { transform: translate(4px, -2px) rotate(0.3deg); }
+                    50% { transform: translate(-3px, -1px) rotate(-0.2deg); }
+                    60% { transform: translate(3px, 1px) rotate(0.2deg); }
+                    70% { transform: translate(-2px, 0) rotate(-0.1deg); }
+                    80% { transform: translate(2px, 0) rotate(0.1deg); }
+                    90% { transform: translate(-1px, 0); }
+                }
+            `}</style>
+        </div>
+    );
+};
 
 // TOAST COMPONENT - Enhanced for better achievement feedback
 const ToastNotification = ({ message, icon, visible }: { message: string, icon: string, visible: boolean }) => {
@@ -139,6 +353,8 @@ const App: React.FC = () => {
   
   const [onlinePoopers, setOnlinePoopers] = useState(0);
   const [toast, setToast] = useState<{ visible: boolean, message: string, icon: string }>({ visible: false, message: '', icon: '' });
+  const [poopHitVisible, setPoopHitVisible] = useState(false);
+  const [viewedAchievements, setViewedAchievements] = useState<Set<string>>(new Set());
 
   // Settings: Username Edit
   const [editingUsername, setEditingUsername] = useState(false);
@@ -148,10 +364,13 @@ const App: React.FC = () => {
   const [historyViewMode, setHistoryViewMode] = useState<'LIST' | 'CALENDAR'>('LIST');
   const [calendarCursor, setCalendarCursor] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(new Date());
+  const [historyDisplayLimit, setHistoryDisplayLimit] = useState(5);
+  const [calendarDisplayLimit, setCalendarDisplayLimit] = useState(5);
 
   const timerRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const noiseNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const musicAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const calculateRatePerSecond = useCallback(() => {
     if (settings.monthlySalary <= 0) return 0;
@@ -165,7 +384,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const initApp = async () => {
         setIsVerifying(true);
-        
+
         // Only store user ID in localStorage, not full user object
         const storedUserId = localStorage.getItem('poopPay_user_id');
         
@@ -175,17 +394,44 @@ const App: React.FC = () => {
                 setUser(validUser);
                 await loadUserData(validUser.id);
                 
+                // Load viewed achievements from localStorage
+                const viewed = safeParse<string[]>(`poopPay_viewed_achievements_${validUser.id}`);
+                if (viewed) {
+                    setViewedAchievements(new Set(viewed));
+                }
+                
                 // Load settings from Supabase
                 const userSettings = await settingsService.getSettings(validUser.id);
                 if (userSettings) {
                     setSettings(userSettings);
-                    setView(AppView.HOME);
+                    
+                    // Check for active timer session
+                    const savedSessionStartTime = localStorage.getItem('poopPay_active_session_start');
+                    if (savedSessionStartTime) {
+                        const startTime = parseInt(savedSessionStartTime, 10);
+                        const now = Date.now();
+                        const elapsed = Math.floor((now - startTime) / 1000);
+                        
+                        // Only restore if session is less than 24 hours old
+                        if (elapsed < 86400) {
+                            setSessionStartTime(startTime);
+                            setElapsedSeconds(elapsed);
+                            setIsTimerRunning(true);
+                            setView(AppView.ACTIVE_SESSION);
+                        } else {
+                            // Session too old, clear it
+                            localStorage.removeItem('poopPay_active_session_start');
+                        }
+                    } else {
+                        setView(AppView.HOME);
+                    }
                 } else {
                     setView(AppView.ONBOARDING);
                 }
             } else {
                 // Invalid user ID, clear it
                 localStorage.removeItem('poopPay_user_id');
+                localStorage.removeItem('poopPay_active_session_start');
                 setView(AppView.AUTH);
             }
         } else {
@@ -223,10 +469,15 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (view === AppView.ACHIEVEMENTS && user) {
+    if (view === AppView.ACHIEVEMENTS && user && history) {
         loadUserData(user.id);
+        // Automatically mark all unlocked achievements as viewed when entering achievements page
+        const unlockedIds = ACHIEVEMENTS_LIST.filter(a => a.condition(history)).map(a => a.id);
+        const newViewed = new Set(unlockedIds);
+        setViewedAchievements(newViewed);
+        localStorage.setItem(`poopPay_viewed_achievements_${user.id}`, JSON.stringify(Array.from(newViewed)));
     }
-  }, [view, user]);
+  }, [view, user?.id, history?.length]);
 
   const loadUserData = async (userId: string) => {
     try {
@@ -292,8 +543,21 @@ const App: React.FC = () => {
 
   useEffect(() => {
     return () => {
+        // Clean up music
+        if (musicAudioRef.current) {
+            musicAudioRef.current.pause();
+            musicAudioRef.current = null;
+        }
+        // Clean up old noise node if exists
         if (noiseNodeRef.current) {
-            try { noiseNodeRef.current.stop(); } catch(e){}
+            try { 
+                if (typeof noiseNodeRef.current.stop === 'function') {
+                    noiseNodeRef.current.stop(); 
+                } else if (noiseNodeRef.current.stop) {
+                    noiseNodeRef.current.stop();
+                }
+            } catch(e){}
+            noiseNodeRef.current = null;
         }
         if (audioContextRef.current) {
             audioContextRef.current.close();
@@ -357,14 +621,19 @@ const App: React.FC = () => {
   };
 
   const handleStartTimer = () => {
-    setSessionStartTime(Date.now());
+    const startTime = Date.now();
+    setSessionStartTime(startTime);
     setElapsedSeconds(0);
     setIsTimerRunning(true);
+    // Save session start time to localStorage for page refresh recovery
+    localStorage.setItem('poopPay_active_session_start', startTime.toString());
     setView(AppView.ACTIVE_SESSION);
   };
 
   const handleStopTimer = async () => {
     setIsTimerRunning(false);
+    // Clear saved session start time
+    localStorage.removeItem('poopPay_active_session_start');
     if (isPrivacyNoiseOn) togglePrivacyNoise();
 
     const duration = elapsedSeconds;
@@ -386,40 +655,24 @@ const App: React.FC = () => {
 
   const togglePrivacyNoise = () => {
       try {
-        if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-        }
-        const ctx = audioContextRef.current;
-
         if (isPrivacyNoiseOn) {
-            if (noiseNodeRef.current) {
-                noiseNodeRef.current.stop();
-                noiseNodeRef.current = null;
+            // Stop music
+            if (musicAudioRef.current) {
+                musicAudioRef.current.pause();
+                musicAudioRef.current.currentTime = 0;
+                musicAudioRef.current = null;
             }
             setIsPrivacyNoiseOn(false);
         } else {
-            const bufferSize = ctx.sampleRate * 2;
-            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-            const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            // === CHILL MUSIC from MP3 file ===
+            const audio = new Audio('/music/sound-relax-music.mp3');
+            audio.loop = true;
+            audio.volume = 0.5; // Comfortable volume
+            audio.play().catch(e => {
+                console.error("Failed to play music:", e);
+            });
+            musicAudioRef.current = audio;
 
-            const noise = ctx.createBufferSource();
-            noise.buffer = buffer;
-            noise.loop = true;
-
-            const filter = ctx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.value = 400;
-            filter.Q.value = 1;
-
-            const gain = ctx.createGain();
-            gain.gain.value = 0.5;
-            
-            noise.connect(filter);
-            filter.connect(gain);
-            gain.connect(ctx.destination);
-            noise.start();
-            noiseNodeRef.current = noise;
             setIsPrivacyNoiseOn(true);
         }
       } catch (e) {
@@ -450,13 +703,22 @@ const App: React.FC = () => {
         const newAchievements = currentUnlocked.filter(a => !previousUnlocked.find(p => p.id === a.id));
 
         if (newAchievements.length > 0) {
+            // Show poop hit animation - longer and funnier
+            setPoopHitVisible(true);
+            setTimeout(() => setPoopHitVisible(false), 3000);
+            
             // Enhanced feedback for first achievement unlock
             showToast(newAchievements[0].title, newAchievements[0].icon, 6000);
             // Play sound if available
             playSound('SCORE');
+            
+            // IMPORTANT: Don't mark new achievements as viewed yet - they should show notification on home page
+            // The new achievements will remain unviewed until user clicks on achievements page
         }
 
         await loadUserData(user.id);
+        // After loading data, ensure new achievements are NOT marked as viewed
+        // They will show notification count on home page
         setIsSaving(false);
         setView(AppView.SUMMARY);
   };
@@ -464,6 +726,8 @@ const App: React.FC = () => {
   const handlePoopCheckSubmit = async () => {
     if (!lastSessionData || !user) return;
     setIsSaving(true);
+    // Clear saved session start time when submitting
+    localStorage.removeItem('poopPay_active_session_start');
     
     // Hardcoded feedback combinations based on shape + volume + color
     const getFeedback = () => {
@@ -609,10 +873,16 @@ const App: React.FC = () => {
     const newAchievements = currentUnlocked.filter(a => !previousUnlocked.find(p => p.id === a.id));
 
     if (newAchievements.length > 0) {
+        // Show poop hit animation - longer and funnier
+        setPoopHitVisible(true);
+        setTimeout(() => setPoopHitVisible(false), 3000);
+        
         // Enhanced feedback for first achievement unlock
         showToast(newAchievements[0].title, newAchievements[0].icon, 6000);
         // Play sound if available
         playSound('SCORE');
+        
+        // Note: New achievements are not marked as viewed yet, so notification will show on home page
     }
 
     await loadUserData(user.id);
@@ -625,6 +895,14 @@ const App: React.FC = () => {
         sessionService.getLeaderboard(leaderboardPeriod).then(setLeaderboard);
     }
   }, [view, leaderboardPeriod]);
+
+  // Reset display limit when switching to history view
+  useEffect(() => {
+    if (view === AppView.HISTORY) {
+      setHistoryDisplayLimit(5);
+      setCalendarDisplayLimit(5);
+    }
+  }, [view]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -644,14 +922,60 @@ const App: React.FC = () => {
       setShowGameMenu(false);
   }
 
-  const copyToClipboard = (text: string) => {
-      navigator.clipboard.writeText(text);
-      showToast("ID Copied!", "📋");
+  const copyToClipboard = async (text: string) => {
+      try {
+          // Modern clipboard API
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(text);
+              showToast("ID Copied!", "📋");
+          } else {
+              // Fallback for older browsers or non-HTTPS
+              const textArea = document.createElement('textarea');
+              textArea.value = text;
+              textArea.style.position = 'fixed';
+              textArea.style.left = '-999999px';
+              textArea.style.top = '-999999px';
+              document.body.appendChild(textArea);
+              textArea.focus();
+              textArea.select();
+              try {
+                  const successful = document.execCommand('copy');
+                  if (successful) {
+                      showToast("ID Copied!", "📋");
+                  } else {
+                      showToast("Copy failed. ID: " + text, "❌");
+                  }
+              } catch (err) {
+                  showToast("Copy failed. ID: " + text, "❌");
+              }
+              document.body.removeChild(textArea);
+          }
+      } catch (err) {
+          // Final fallback - show the ID in a toast so user can manually copy
+          showToast("ID: " + text, "📋");
+      }
   }
 
   // --- RENDERERS ---
 
   const renderActiveSession = () => (
+    <>
+      <style>{`
+        @keyframes waveFlow {
+          0%, 100% {
+            transform: translateY(0px) scale(1);
+          }
+          25% {
+            transform: translateY(-3px) scale(1.05);
+          }
+          50% {
+            transform: translateY(0px) scale(1);
+          }
+          75% {
+            transform: translateY(3px) scale(0.95);
+          }
+        }
+      `}</style>
     <div className="flex flex-col h-[100dvh] bg-brand-cream relative overflow-hidden">
       <div className="absolute top-4 left-0 right-0 flex justify-center z-10">
           <div className="bg-black/80 text-white px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-2 shadow-sm animate-pulse">
@@ -689,8 +1013,12 @@ const App: React.FC = () => {
                             <span className="text-xs">GAMES</span>
                         </button>
                         <button onClick={togglePrivacyNoise} className={`flex-1 border-2 border-black py-4 rounded-xl font-bold shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all flex flex-col items-center justify-center gap-1 ${isPrivacyNoiseOn ? 'bg-brand-blue text-white' : 'bg-gray-100 text-gray-600'}`}>
-                            {isPrivacyNoiseOn ? <Wind size={24} className="animate-spin" /> : <VolumeX size={24} />} 
-                            <span className="text-xs">{isPrivacyNoiseOn ? 'FAN ON' : 'FAN OFF'}</span>
+                            {isPrivacyNoiseOn ? (
+                                <span className="text-2xl inline-block" style={{
+                                    animation: 'waveFlow 2s ease-in-out infinite'
+                                }}>🌊</span>
+                            ) : <VolumeX size={24} />} 
+                            <span className="text-xs">{isPrivacyNoiseOn ? 'SOUND ON' : 'SOUND OFF'}</span>
                         </button>
                   </div>
 
@@ -701,6 +1029,7 @@ const App: React.FC = () => {
           </div>
       </div>
     </div>
+    </>
   );
   
   const renderSummary = () => {
@@ -759,8 +1088,24 @@ const App: React.FC = () => {
   if (isVerifying) return <div className="h-screen flex flex-col items-center justify-center bg-brand-cream"><div className="animate-spin text-6xl mb-4">💩</div><span className="font-bold text-brand-brown">Loading...</span></div>;
   const renderOnboarding = () => (
     <div className="max-w-md mx-auto h-screen bg-brand-cream p-6 flex flex-col justify-center space-y-6">
+        <div className="flex items-center gap-4 mb-4">
+            <button 
+                onClick={() => {
+                    // Clear user data and return to auth page
+                    setUser(null);
+                    setAuthInput('');
+                    setIsRegistering(true);
+                    localStorage.removeItem('poopPay_user_id');
+                    setView(AppView.AUTH);
+                }} 
+                className="p-2 bg-white rounded-full border-2 border-black hover:bg-gray-100"
+            >
+                <ChevronLeft size={20} />
+            </button>
+            <h1 className="text-3xl font-black text-brand-brown text-center flex-1">Setup Profile</h1>
+            <div className="w-10"></div> {/* Spacer for centering */}
+        </div>
         <div className="flex justify-center mb-[-10px]"><div className="text-6xl animate-bounce-slow">💩</div></div>
-        <h1 className="text-3xl font-black text-brand-brown text-center">Setup Profile</h1>
         <Card title="Salary Info">
             <div className="space-y-4">
                 <label className="block text-sm font-bold text-gray-700">Monthly Salary</label>
@@ -780,6 +1125,7 @@ const App: React.FC = () => {
   );
   const renderHome = () => {
     const unlockedIds = ACHIEVEMENTS_LIST.filter(a => a.condition(history)).map(a => a.id);
+    const unviewedCount = unlockedIds.filter(id => !viewedAchievements.has(id)).length;
     const ratePerSec = calculateRatePerSecond();
     const latestSession = history[0];
 
@@ -788,7 +1134,7 @@ const App: React.FC = () => {
       {/* Header */}
       <div className="w-full flex justify-between items-center shrink-0">
         <div className="flex items-center gap-2"><div className="w-8 h-8 bg-brand-brown rounded-full flex items-center justify-center text-white font-bold">{(user?.username || '?').charAt(0).toUpperCase()}</div><div className="flex flex-col leading-none"><span className="font-bold text-gray-700">{user?.username || 'Guest'}</span><span className="text-xs text-green-600 font-bold">Online</span></div></div>
-        <div className="flex gap-2"><button onClick={() => setView(AppView.ACHIEVEMENTS)} className="p-2 bg-white border-2 border-black rounded-full hover:bg-gray-100 relative"><Award size={20} className="text-brand-brown" />{unlockedIds.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full border border-black">{unlockedIds.length}</span>}</button><button onClick={() => setView(AppView.LEADERBOARD)} className="p-2 bg-white border-2 border-black rounded-full hover:bg-gray-100"><Trophy size={20} className="text-yellow-600" /></button><button onClick={() => setView(AppView.SETTINGS)} className="p-2 bg-white border-2 border-black rounded-full hover:bg-gray-100"><Settings size={20} /></button></div>
+        <div className="flex gap-2"><button onClick={() => setView(AppView.ACHIEVEMENTS)} className="p-2 bg-white border-2 border-black rounded-full hover:bg-gray-100 relative"><Award size={20} className="text-brand-brown" />{unviewedCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border border-black font-black">{unviewedCount}</span>}</button><button onClick={() => setView(AppView.LEADERBOARD)} className="p-2 bg-white border-2 border-black rounded-full hover:bg-gray-100"><Trophy size={20} className="text-yellow-600" /></button><button onClick={() => setView(AppView.SETTINGS)} className="p-2 bg-white border-2 border-black rounded-full hover:bg-gray-100"><Settings size={20} /></button></div>
       </div>
       
       {/* Start Button */}
@@ -889,8 +1235,8 @@ const App: React.FC = () => {
         
         <div className="bg-yellow-100 border-l-4 border-yellow-500 p-3 rounded-r shadow-sm">
             <div className="flex items-start gap-2">
-                <AlertTriangle className="text-yellow-600 shrink-0 mt-0.5" size={16} />
-                <p className="text-[10px] text-yellow-800 font-bold leading-tight">
+                <AlertTriangle className="text-yellow-600 shrink-0 mt-0.5" size={18} />
+                <p className="text-sm text-yellow-800 font-bold leading-tight">
                     Please remember your Secret ID at your user profile! You will need it to log in to the same account on a different device.
                 </p>
             </div>
@@ -1009,42 +1355,150 @@ const App: React.FC = () => {
                   </div>
               </div>
 
-              {/* HUE */}
+              {/* COLOUR */}
               <div>
-                  <h3 className="text-[9px] font-black text-gray-600 mb-1 uppercase tracking-wide px-1">Hue</h3>
+                  <h3 className="text-[9px] font-black text-gray-600 mb-1 uppercase tracking-wide px-1">Colour</h3>
                   <div className="grid grid-cols-4 gap-1">
                       {POOP_COLORS.map((item) => {
                           const isSelected = selectedPoopColor === item.id;
                           return (
-                              <button key={item.id} onClick={() => setSelectedPoopColor(item.id)} className={`relative aspect-square rounded-lg flex flex-col items-center justify-center p-0.5 transition-all duration-200 border-2 ${isSelected ? 'border-3 border-black bg-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'border-black bg-white/50'} `}>
+                              <button key={item.id} onClick={() => setSelectedPoopColor(item.id)} className={`aspect-square rounded-lg flex flex-col items-center justify-center p-0.5 transition-all duration-200 border-2 ${isSelected ? 'border-3 border-black bg-brand-blue shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'border-black bg-white shadow-sm hover:bg-gray-50'} `}>
                                    <div className={`w-4 h-4 rounded-full border-2 border-black/20 ${item.bg} shadow-inner`}></div>
-                                   <div className="text-[7px] font-black uppercase leading-none mt-0.5">{item.label}</div>
+                                   <div className="text-[7px] font-black text-brand-brown uppercase leading-tight mt-0.5">{item.label}</div>
                               </button>
                           )
                       })}
-                  </div>
               </div>
-
+          </div>
+          
               {/* BUTTONS - Now part of the same flex container */}
               <div className="mt-auto pt-2 space-y-1.5">
                   <Button fullWidth onClick={handlePoopCheckSubmit} disabled={!selectedPoopType || isSaving} className="text-sm py-2">
                       {isSaving ? "Flushing..." : "💩 Flush It!"}
-                  </Button>
-                  <Button fullWidth variant="ghost" onClick={handleSkip} disabled={isSaving} className="text-xs text-gray-500 py-1">
-                      Skip Details
-                  </Button>
+              </Button>
+                  <Button fullWidth variant="ghost" onClick={handleSkip} disabled={isSaving} className="text-sm py-2 text-gray-500">
+                  Skip Details
+              </Button>
               </div>
           </div>
       </div>
   );
-  const renderLeaderboard = () => (
-     <div className="max-w-md mx-auto h-screen bg-brand-cream p-4 space-y-4"><div className="flex items-center gap-4 py-2"><button onClick={() => setView(AppView.HOME)} className="p-2 bg-white rounded-full border-2 border-black"><Home size={20} /></button><h2 className="text-2xl font-black text-brand-brown">Leaderboard</h2></div><div className="flex-1 overflow-y-auto space-y-2 pb-20">{leaderboard.length === 0 && <p className="text-center text-gray-500">No data available.</p>}{leaderboard.map((entry, idx) => (<div key={idx} className="bg-white border-2 border-black rounded-xl p-3 flex items-center justify-between shadow-sm"><div className="flex items-center gap-3"><div className="font-bold">{idx + 1}. {entry.username}</div></div><div className="font-black text-green-600">{settings.currencySymbol}{entry.total_earnings.toFixed(2)}</div></div>))}</div></div>
-  );
+  // Currency conversion rates (simplified - in production, use real-time API)
+  const getCurrencyRate = (from: string, to: string): number => {
+    // Base currency: RM (MYR)
+    const rates: Record<string, number> = {
+      'RM': 1.0,
+      '$': 0.21, // USD
+      'SGD': 0.28,
+      '€': 0.19, // EUR
+      '£': 0.17, // GBP
+      '¥': 31.0, // JPY/CNY
+      '₩': 280.0, // KRW
+      'NT$': 6.5 // TWD
+    };
+    
+    const fromRate = rates[from] || 1.0;
+    const toRate = rates[to] || 1.0;
+    return toRate / fromRate;
+  };
+
+  const convertCurrency = (amount: number, fromCurrency: string, toCurrency: string): number => {
+    if (fromCurrency === toCurrency) return amount;
+    const rate = getCurrencyRate(fromCurrency, toCurrency);
+    return amount * rate;
+  };
+
+  const renderLeaderboard = () => {
+    // Assume all earnings in leaderboard are stored in RM (base currency)
+    // Convert to user's selected currency
+    const baseCurrency = 'RM';
+    const userCurrency = settings.currencySymbol;
+    
+    return (
+      <div className="max-w-md mx-auto h-screen bg-brand-cream p-4 space-y-4">
+        <div className="flex items-center gap-4 py-2">
+          <button onClick={() => setView(AppView.HOME)} className="p-2 bg-white rounded-full border-2 border-black">
+            <Home size={20} />
+          </button>
+          <h2 className="text-2xl font-black text-brand-brown">Leaderboard</h2>
+        </div>
+        <div className="flex-1 overflow-y-auto space-y-2 pb-20">
+          {leaderboard.length === 0 && <p className="text-center text-gray-500">No data available.</p>}
+          {leaderboard.map((entry, idx) => {
+            const convertedEarnings = convertCurrency(entry.total_earnings, baseCurrency, userCurrency);
+            return (
+              <div key={idx} className="bg-white border-2 border-black rounded-xl p-3 flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="font-bold">{idx + 1}. {entry.username}</div>
+                </div>
+                <div className="font-black text-green-600">
+                  {userCurrency}{convertedEarnings.toFixed(2)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+  const handleAchievementNotificationClick = () => {
+    if (!user) return;
+    const unlockedIds = ACHIEVEMENTS_LIST.filter(a => a.condition(history)).map(a => a.id);
+    const newViewed = new Set(unlockedIds);
+    setViewedAchievements(newViewed);
+    localStorage.setItem(`poopPay_viewed_achievements_${user.id}`, JSON.stringify(Array.from(newViewed)));
+  };
+
   const renderAchievements = () => {
     const unlockedIds = ACHIEVEMENTS_LIST.filter(a => a.condition(history)).map(a => a.id);
     const earnedCount = unlockedIds.length;
+    const unviewedCount = unlockedIds.filter(id => !viewedAchievements.has(id)).length;
+    
     return (
-        <div className="flex flex-col h-full p-4 space-y-4"><div className="flex items-center gap-4 py-2"><button onClick={() => setView(AppView.HOME)} className="p-2 bg-white rounded-full border-2 border-black hover:bg-gray-100"><Home size={20} /></button><h2 className="text-2xl font-black text-brand-brown">Achievements</h2></div><div className="bg-brand-brown text-brand-yellow p-4 rounded-xl border-2 border-black flex items-center justify-between"><div><div className="text-sm font-bold opacity-80">UNLOCKED</div><div className="text-3xl font-black">{earnedCount} / {ACHIEVEMENTS_LIST.length}</div></div><div className="text-4xl">🏆</div></div><div className="flex-1 overflow-y-auto space-y-3 pb-20">{ACHIEVEMENTS_LIST.map((ach) => { const isUnlocked = unlockedIds.includes(ach.id); return ( <div key={ach.id} className={`border-2 rounded-xl p-3 flex items-center gap-4 transition-all ${isUnlocked ? 'bg-white border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-gray-200 border-gray-400 opacity-60 grayscale'}`}> <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl border-2 ${isUnlocked ? 'bg-brand-yellow border-black' : 'bg-gray-300 border-gray-400'}`}> {ach.icon} </div> <div className="flex-1"> <h3 className={`font-black ${isUnlocked ? 'text-brand-brown' : 'text-gray-600'}`}>{ach.title}</h3> <p className="text-xs text-gray-500 leading-tight">{ach.description}</p> </div> {isUnlocked && <Check size={20} className="text-green-600" />} </div> ) })}</div></div>
+        <div className="flex flex-col h-full p-4 space-y-4">
+            <div className="flex items-center gap-4 py-2">
+                <button onClick={() => setView(AppView.HOME)} className="p-2 bg-white rounded-full border-2 border-black hover:bg-gray-100">
+                    <Home size={20} />
+                </button>
+                <h2 className="text-2xl font-black text-brand-brown">Achievements</h2>
+                {unviewedCount > 0 && (
+                    <button 
+                        onClick={handleAchievementNotificationClick}
+                        className="relative bg-red-500 text-white rounded-full px-3 py-1 text-sm font-black border-2 border-black hover:bg-red-600 transition-colors"
+                    >
+                        {unviewedCount}
+                    </button>
+                )}
+            </div>
+            <div className="bg-brand-brown text-brand-yellow p-4 rounded-xl border-2 border-black flex items-center justify-between">
+                <div>
+                    <div className="text-sm font-bold opacity-80">UNLOCKED</div>
+                    <div className="text-3xl font-black">{earnedCount} / {ACHIEVEMENTS_LIST.length}</div>
+                </div>
+                <div className="text-4xl">🏆</div>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-3 pb-20">
+                {ACHIEVEMENTS_LIST.map((ach) => { 
+                    const isUnlocked = unlockedIds.includes(ach.id);
+                    const isUnviewed = isUnlocked && !viewedAchievements.has(ach.id);
+                    return ( 
+                        <div 
+                            key={ach.id} 
+                            className={`border-2 rounded-xl p-3 flex items-center gap-4 transition-all ${isUnlocked ? 'bg-white border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-gray-200 border-gray-400 opacity-60 grayscale'} ${isUnviewed ? 'ring-4 ring-yellow-400 animate-pulse' : ''}`}
+                        > 
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl border-2 ${isUnlocked ? 'bg-brand-yellow border-black' : 'bg-gray-300 border-gray-400'}`}> 
+                                {ach.icon} 
+                            </div> 
+                            <div className="flex-1"> 
+                                <h3 className={`font-black ${isUnlocked ? 'text-brand-brown' : 'text-gray-600'}`}>{ach.title}</h3> 
+                                <p className="text-xs text-gray-500 leading-tight">{ach.description}</p> 
+                            </div> 
+                            {isUnlocked && <Check size={20} className="text-green-600" />} 
+                        </div> 
+                    ) 
+                })}
+            </div>
+        </div>
     );
   };
   
@@ -1224,7 +1678,7 @@ const App: React.FC = () => {
             {historyViewMode === 'LIST' ? (
                 <div className="space-y-3">
                     {history.length === 0 && <div className="text-center text-gray-400 font-bold py-10">No logs yet. Start pooping!</div>}
-                    {[...history].reverse().map((session, index) => (
+                    {[...history].reverse().slice(0, historyDisplayLimit).map((session, index) => (
                         <Card key={session.id || index} className="flex flex-col gap-2">
                             <div className="flex justify-between items-start">
                                 <div>
@@ -1241,6 +1695,24 @@ const App: React.FC = () => {
                             </div>
                         </Card>
                     ))}
+                    {history.length > historyDisplayLimit && (
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => setHistoryDisplayLimit(prev => Math.min(prev + 5, history.length))}
+                                className="flex-1 bg-brand-yellow border-2 border-black rounded-xl p-3 font-black text-brand-brown hover:bg-yellow-400 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-1"
+                            >
+                                View More ({Math.min(5, history.length - historyDisplayLimit)} more)
+                            </button>
+                            {historyDisplayLimit > 5 && (
+                                <button 
+                                    onClick={() => setHistoryDisplayLimit(5)}
+                                    className="bg-gray-200 border-2 border-black rounded-xl p-3 font-black text-gray-700 hover:bg-gray-300 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-1"
+                                >
+                                    Hide
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div className="space-y-4">
@@ -1351,7 +1823,7 @@ const App: React.FC = () => {
                             
                             {selectedDaySessions.length > 0 ? (
                                 <div className="space-y-2">
-                                    {selectedDaySessions.map((session, idx) => (
+                                    {selectedDaySessions.slice(0, calendarDisplayLimit).map((session, idx) => (
                                         <div key={idx} className="bg-white border-2 border-black rounded-xl p-2.5 flex flex-col gap-2 shadow-sm overflow-x-hidden">
                                             <div className="flex justify-between items-center border-b border-dashed pb-2 gap-2">
                                                 <div className="flex items-center gap-2 min-w-0">
@@ -1372,6 +1844,24 @@ const App: React.FC = () => {
                                             </div>
                                         </div>
                                     ))}
+                                    {selectedDaySessions.length > calendarDisplayLimit && (
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => setCalendarDisplayLimit(prev => Math.min(prev + 5, selectedDaySessions.length))}
+                                                className="flex-1 bg-brand-yellow border-2 border-black rounded-xl p-2 font-black text-brand-brown text-sm hover:bg-yellow-400 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-1"
+                                            >
+                                                View More ({Math.min(5, selectedDaySessions.length - calendarDisplayLimit)} more)
+                                            </button>
+                                            {calendarDisplayLimit > 5 && (
+                                                <button 
+                                                    onClick={() => setCalendarDisplayLimit(5)}
+                                                    className="bg-gray-200 border-2 border-black rounded-xl p-2 font-black text-gray-700 text-sm hover:bg-gray-300 transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-1"
+                                                >
+                                                    Hide
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="bg-gray-100 border-2 border-gray-300 rounded-xl p-4 text-center border-dashed">
@@ -1393,6 +1883,7 @@ const App: React.FC = () => {
 
   return (
     <div className="max-w-md mx-auto h-screen bg-brand-cream relative">
+        <PoopHitAnimation visible={poopHitVisible} />
         <ToastNotification message={toast.message} icon={toast.icon} visible={toast.visible} />
         {view === AppView.AUTH && renderAuth()}
         {view === AppView.ONBOARDING && renderOnboarding()}
@@ -1425,6 +1916,40 @@ const App: React.FC = () => {
                   <button onClick={() => launchGame('SPEEDROLL')} className="w-full bg-gray-200 border-2 border-black p-4 rounded-xl flex items-center gap-4 hover:scale-105 transition-transform shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-y-1"><span className="text-4xl">🧻</span><div className="text-left"><div className="font-black text-xl">Speed Roll</div></div></button>
               </div>
           </div>
+      )}
+      {/* Prevent scroll, text selection, and magnifier when any game is active */}
+      {activeGame && (
+        <style>{`
+          body {
+            overflow: hidden !important;
+            position: fixed !important;
+            width: 100% !important;
+            height: 100% !important;
+            touch-action: none !important;
+            -webkit-overflow-scrolling: none !important;
+            overscroll-behavior: none !important;
+            -webkit-user-select: none !important;
+            -moz-user-select: none !important;
+            -ms-user-select: none !important;
+            user-select: none !important;
+            -webkit-tap-highlight-color: transparent !important;
+            -webkit-touch-callout: none !important;
+          }
+          * {
+            -webkit-user-select: none !important;
+            -moz-user-select: none !important;
+            -ms-user-select: none !important;
+            user-select: none !important;
+            -webkit-tap-highlight-color: transparent !important;
+            -webkit-touch-callout: none !important;
+          }
+          /* Prevent text selection and magnifier on long press */
+          *:not(input):not(textarea) {
+            -webkit-user-select: none !important;
+            -webkit-touch-callout: none !important;
+            -webkit-tap-highlight-color: transparent !important;
+          }
+        `}</style>
       )}
       {activeGame === 'FLAPPY' && <FlappyPoop onClose={() => setActiveGame(null)} userId={user?.id} />}
       {activeGame === 'SNAKE' && <SnakeGame onClose={() => setActiveGame(null)} userId={user?.id} />}

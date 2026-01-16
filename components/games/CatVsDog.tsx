@@ -736,6 +736,13 @@ export const CatVsDog: React.FC<CatVsDogProps> = ({ onClose, userId }) => {
         
         <div 
             className="w-full flex-1 relative bg-[#87CEEB] touch-none select-none cursor-crosshair overflow-hidden"
+            style={{
+              touchAction: 'none',
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              userSelect: 'none',
+              WebkitTapHighlightColor: 'transparent'
+            }}
             onMouseDown={handlePointerDown}
             onMouseMove={handlePointerMove}
             onMouseUp={handlePointerUp}
@@ -743,6 +750,8 @@ export const CatVsDog: React.FC<CatVsDogProps> = ({ onClose, userId }) => {
             onTouchStart={handlePointerDown}
             onTouchMove={handlePointerMove}
             onTouchEnd={handlePointerUp}
+            onContextMenu={(e) => e.preventDefault()}
+            onSelectStart={(e) => e.preventDefault()}
         >
              <canvas 
                 ref={canvasRef}

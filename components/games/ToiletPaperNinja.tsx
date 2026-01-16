@@ -870,10 +870,19 @@ export const ToiletPaperNinja: React.FC<NinjaProps> = ({ onClose, userId }) => {
 
          <div 
             className="flex-1 relative bg-gray-100 cursor-crosshair touch-none overflow-hidden"
+            style={{
+              touchAction: 'none',
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              userSelect: 'none',
+              WebkitTapHighlightColor: 'transparent'
+            }}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
+            onContextMenu={(e) => e.preventDefault()}
+            onSelectStart={(e) => e.preventDefault()}
          >
              <canvas 
                 ref={canvasRef}

@@ -231,7 +231,20 @@ export const FlappyPoop: React.FC<FlappyPoopProps> = ({ onClose, userId }) => {
 
         <div className="text-center font-bold text-4xl mb-2 text-brand-blue">{score}</div>
         
-        <div className="relative border-4 border-black rounded-lg overflow-hidden bg-brand-blue" style={{ height: '400px' }} onClick={jump}>
+        <div 
+            className="relative border-4 border-black rounded-lg overflow-hidden bg-brand-blue" 
+            style={{ 
+                height: '400px',
+                touchAction: 'none',
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
+                WebkitTapHighlightColor: 'transparent'
+            }} 
+            onClick={jump}
+            onContextMenu={(e) => e.preventDefault()}
+            onSelectStart={(e) => e.preventDefault()}
+        >
             <canvas 
                 ref={canvasRef} 
                 width={300} 

@@ -371,7 +371,18 @@ export const WhackATurd: React.FC<WhackATurdProps> = ({ onClose, userId }) => {
              </div>
          </div>
 
-         <div className={`grid grid-cols-3 gap-3 p-4 rounded-xl border-4 relative min-h-[300px] touch-manipulation transition-colors duration-300 ${isFeverMode ? 'bg-orange-300 border-orange-500' : 'bg-[#8B4513] border-[#5D4037]'}`}>
+         <div 
+            className={`grid grid-cols-3 gap-3 p-4 rounded-xl border-4 relative min-h-[300px] touch-manipulation transition-colors duration-300 ${isFeverMode ? 'bg-orange-300 border-orange-500' : 'bg-[#8B4513] border-[#5D4037]'}`}
+            style={{
+              touchAction: 'none',
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              userSelect: 'none',
+              WebkitTapHighlightColor: 'transparent'
+            }}
+            onContextMenu={(e) => e.preventDefault()}
+            onSelectStart={(e) => e.preventDefault()}
+         >
              
              <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
                  {floatingTexts.map(t => (
