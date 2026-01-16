@@ -17,8 +17,15 @@ const BRICK_ROWS = 6;
 const BRICK_COLS = 6;
 
 // DIFFICULTY TWEAKS
-const BASE_SPEED = 4.2; // Increased for faster poop speed
-const LEVEL_SPEED_INC = 0.05; 
+const BASE_SPEED_DESKTOP = 5.0; // Desktop speed
+const BASE_SPEED_MOBILE = 5.5; // Mobile speed (slightly faster)
+const LEVEL_SPEED_INC = 0.05;
+
+// Detect if device is mobile
+const isMobileDevice = () => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+           (window.matchMedia && window.matchMedia("(max-width: 768px)").matches);
+}; 
 
 interface Ball {
     x: number;
@@ -95,6 +102,7 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
   const shakeRef = useRef(0);
   const frameRef = useRef(0);
   const speedMultiplierRef = useRef(1.0);
+  const baseSpeedRef = useRef(isMobileDevice() ? BASE_SPEED_MOBILE : BASE_SPEED_DESKTOP);
   
   // BUG FIX: Lock to prevent multiple level completions
   const isLevelCompleting = useRef(false);
@@ -130,6 +138,8 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
       isLosingLife.current = false; // Reset life loss flag
       
       speedMultiplierRef.current = 1.0 + ((lvl - 1) * LEVEL_SPEED_INC);
+      // Update base speed based on device type
+      baseSpeedRef.current = isMobileDevice() ? BASE_SPEED_MOBILE : BASE_SPEED_DESKTOP;
 
       playSound('JUMP');
       
@@ -211,6 +221,7 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
   const goToNextLevel = () => {
       setLevel(prev => {
           const next = prev + 1;
+          setLives(3); // Reset lives to 3 at the start of each new level
           startLevel(next);
           return next;
       });
@@ -317,7 +328,7 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
           balls.current.forEach(b => {
               if (b.attached && b.active) {
                   b.attached = false;
-                  b.dy = -BASE_SPEED * speedMultiplierRef.current;
+                  b.dy = -baseSpeedRef.current * speedMultiplierRef.current;
                   b.dx = (Math.random() - 0.5) * 4;
                   released = true;
               }
@@ -425,7 +436,7 @@ export const PoopBreaker: React.FC<PoopBreakerProps> = ({ onClose, userId }) => 
                   balls.current.forEach(b => {
                       if(b.attached) {
                           b.attached = false;
-                          b.dy = -BASE_SPEED * speedMultiplierRef.current;
+                          b.dy = -baseSpeedRef.current * speedMultiplierRef.current;
                       }
                   });
               }
