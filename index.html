@@ -3,7 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="https://fav.farm/💩" />
+    <link rel="apple-touch-icon" href="https://fav.farm/💩" />
+    <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <!-- Preconnect to external resources for better performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="dns-prefetch" href="https://cdn.tailwindcss.com" />
+    <link rel="dns-prefetch" href="https://esm.sh" />
     
     <!-- Primary Meta Tags -->
     <title>PoopPay - Get Paid for Your Bathroom Time | Track & Earn Money</title>
@@ -23,7 +31,8 @@
     <meta property="og:description" content="Track your bathroom time and calculate how much money you earn while pooping. Play games, earn achievements, and get paid for your time on the toilet!" />
     <meta property="og:image" content="https://pooppay-nine.vercel.app/og-image.png" />
     <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
+    <meta property="og:image:height" content="360" />
+    <meta property="og:image:alt" content="PoopPay - Get Paid for Your Bathroom Time" />
     <meta property="og:site_name" content="PoopPay" />
     <meta property="og:locale" content="en_US" />
     
@@ -40,6 +49,16 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="PoopPay" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-TileColor" content="#FFFDD0" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
+    
+    <!-- Additional SEO Meta Tags -->
+    <meta name="geo.region" content="US" />
+    <meta name="geo.placename" content="Global" />
+    <meta name="distribution" content="global" />
+    <meta name="rating" content="general" />
+    <meta name="copyright" content="PoopPay" />
     
     <!-- Structured Data (JSON-LD) -->
     <script type="application/ld+json">
@@ -69,6 +88,33 @@
         "Session history",
         "Statistics dashboard"
       ]
+    }
+    </script>
+    
+    <!-- Organization Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "PoopPay",
+      "url": "https://pooppay-nine.vercel.app/",
+      "logo": "https://pooppay-nine.vercel.app/og-image.png",
+      "description": "A fun and unique app that tracks bathroom time and calculates earnings",
+      "sameAs": []
+    }
+    </script>
+    
+    <!-- BreadcrumbList Schema -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [{
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://pooppay-nine.vercel.app/"
+      }]
     }
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
