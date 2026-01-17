@@ -1273,10 +1273,10 @@ const App: React.FC = () => {
                      <span className="font-mono truncate mr-2 max-w-[200px]">{user?.id}</span>
                      <button onClick={() => copyToClipboard(user?.id || '')} className="text-brand-brown hover:bg-gray-200 p-1 rounded"><Copy size={14} /></button>
                  </div>
-                 <div className="mt-2 text-[10px] text-red-500 font-bold flex items-center gap-1">
-                     <AlertTriangle size={12} />
-                     <span>Save this ID to login on other devices!</span>
-                 </div>
+                <div className="mt-2 text-base text-red-500 font-bold flex items-center gap-1">
+                    <AlertTriangle size={18} />
+                    <span>Save this ID to login on other devices!</span>
+                </div>
              </div>
         </Card>
 
