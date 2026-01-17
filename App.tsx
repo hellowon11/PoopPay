@@ -1748,7 +1748,37 @@ const App: React.FC = () => {
                 <label className="block text-sm font-bold text-gray-700">Monthly Salary</label>
                 <div className="flex gap-2">
                     <select className="border-2 border-black rounded-xl p-3 bg-white font-bold" value={settings.currencySymbol} onChange={(e) => setSettings({...settings, currencySymbol: e.target.value})}><option value="RM">RM (MYR)</option><option value="$">USD ($)</option><option value="SGD">SGD (S$)</option><option value="€">EUR (€)</option><option value="£">GBP (£)</option><option value="¥">JPY/CNY (¥)</option><option value="₩">KRW (₩)</option><option value="NT$">TWD (NT$)</option></select>
-                    <input type="number" className="border-2 border-black rounded-xl p-3 w-full font-bold" value={settings.monthlySalary || ''} onChange={(e) => setSettings({...settings, monthlySalary: Number(e.target.value)})} placeholder="0.00" />
+                    <input 
+                        type="text" 
+                        inputMode="decimal"
+                        pattern="[0-9]*"
+                        className="border-2 border-black rounded-xl p-3 w-full font-bold" 
+                        value={settings.monthlySalary || ''} 
+                        onChange={(e) => {
+                            const value = e.target.value;
+                            // Only allow numbers and one decimal point
+                            if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                                setSettings({...settings, monthlySalary: value === '' ? 0 : Number(value)});
+                            }
+                        }} 
+                        onKeyPress={(e) => {
+                            // Prevent non-numeric characters (except decimal point)
+                            const char = e.key;
+                            if (!/[0-9.]/.test(char) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter'].includes(char)) {
+                                e.preventDefault();
+                            }
+                        }}
+                        onPaste={(e) => {
+                            // Prevent pasting non-numeric content
+                            e.preventDefault();
+                            const pastedText = e.clipboardData.getData('text');
+                            const numericValue = pastedText.replace(/[^\d.]/g, '');
+                            if (numericValue === '' || /^\d*\.?\d*$/.test(numericValue)) {
+                                setSettings({...settings, monthlySalary: numericValue === '' ? 0 : Number(numericValue)});
+                            }
+                        }}
+                        placeholder="0.00" 
+                    />
                 </div>
                 <Button fullWidth disabled={!settings.monthlySalary} onClick={async () => { 
                     if (user) {
@@ -1933,7 +1963,37 @@ const App: React.FC = () => {
                             <option value="₩">KRW (₩)</option>
                             <option value="NT$">TWD (NT$)</option>
                         </select>
-                        <input type="number" className="border-2 border-black rounded-xl p-2 flex-1 font-bold text-sm min-w-0" value={settings.monthlySalary || ''} onChange={(e) => setSettings({...settings, monthlySalary: Number(e.target.value)})} placeholder="0.00" />
+                        <input 
+                            type="text" 
+                            inputMode="decimal"
+                            pattern="[0-9]*"
+                            className="border-2 border-black rounded-xl p-2 flex-1 font-bold text-sm min-w-0" 
+                            value={settings.monthlySalary || ''} 
+                            onChange={(e) => {
+                                const value = e.target.value;
+                                // Only allow numbers and one decimal point
+                                if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                                    setSettings({...settings, monthlySalary: value === '' ? 0 : Number(value)});
+                                }
+                            }} 
+                            onKeyPress={(e) => {
+                                // Prevent non-numeric characters (except decimal point)
+                                const char = e.key;
+                                if (!/[0-9.]/.test(char) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter'].includes(char)) {
+                                    e.preventDefault();
+                                }
+                            }}
+                            onPaste={(e) => {
+                                // Prevent pasting non-numeric content
+                                e.preventDefault();
+                                const pastedText = e.clipboardData.getData('text');
+                                const numericValue = pastedText.replace(/[^\d.]/g, '');
+                                if (numericValue === '' || /^\d*\.?\d*$/.test(numericValue)) {
+                                    setSettings({...settings, monthlySalary: numericValue === '' ? 0 : Number(numericValue)});
+                                }
+                            }}
+                            placeholder="0.00" 
+                        />
                     </div>
                 </div>
                 <Button fullWidth onClick={async () => { 
