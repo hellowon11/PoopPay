@@ -85,6 +85,643 @@ const ACHIEVEMENTS_LIST: Achievement[] = [
   { id: 'weekend_warrior', title: 'Weekend Warrior', description: 'Pooped on weekend.', icon: '🎮', condition: (history) => history.some(s => { const d = new Date(s.startTime); return d.getDay() === 0 || d.getDay() === 6; }) }
 ];
 
+// --- ACHIEVEMENT PROGRESS CALCULATION ---
+interface AchievementProgress {
+  achievement: Achievement;
+  current: number;
+  target: number;
+  progress: number; // 0-100
+  isUnlocked: boolean;
+  displayText: string;
+}
+
+const calculateAchievementProgress = (achievement: Achievement, history: PoopSession[]): AchievementProgress => {
+  const isUnlocked = achievement.condition(history);
+  
+  let current = 0;
+  let target = 0;
+  let displayText = '';
+  
+  switch (achievement.id) {
+    // Count-based achievements
+    case 'first_drop':
+      current = history.length;
+      target = 1;
+      displayText = `${current}/${target} sessions`;
+      break;
+    case 'regular':
+      current = history.length;
+      target = 5;
+      displayText = `${current}/${target} sessions`;
+      break;
+    case 'veteran':
+      current = history.length;
+      target = 20;
+      displayText = `${current}/${target} sessions`;
+      break;
+    case 'master':
+      current = history.length;
+      target = 50;
+      displayText = `${current}/${target} sessions`;
+      break;
+    case 'legend':
+      current = history.length;
+      target = 100;
+      displayText = `${current}/${target} sessions`;
+      break;
+    
+    // Time-based achievements
+    case 'speed_demon':
+      const fastestTime = history.length > 0 ? Math.min(...history.map(s => s.durationSeconds).filter(t => t > 10)) : Infinity;
+      current = fastestTime === Infinity ? 0 : Math.max(0, 120 - fastestTime);
+      target = 120;
+      displayText = fastestTime === Infinity ? 'No valid time yet' : `Best: ${Math.floor(fastestTime)}s (target: <120s)`;
+      break;
+    case 'the_thinker':
+      const longestTime = history.length > 0 ? Math.max(...history.map(s => s.durationSeconds)) : 0;
+      current = longestTime;
+      target = 1200;
+      displayText = `${Math.floor(current)}s / ${target}s`;
+      break;
+    case 'marathon':
+      const totalTime = history.reduce((acc, curr) => acc + curr.durationSeconds, 0);
+      current = totalTime;
+      target = 18000;
+      displayText = `${Math.floor(current / 60)}min / ${Math.floor(target / 60)}min`;
+      break;
+    
+    // Type-based achievements
+    case 'snake_charmer':
+      const hasType4 = history.some(s => s.poop_type === 4);
+      current = hasType4 ? 1 : 0;
+      target = 1;
+      displayText = hasType4 ? 'Completed' : 'Not logged yet';
+      break;
+    case 'liquid_assets':
+      const hasType7 = history.some(s => s.poop_type === 7);
+      current = hasType7 ? 1 : 0;
+      target = 1;
+      displayText = hasType7 ? 'Completed' : 'Not logged yet';
+      break;
+    case 'hard_worker':
+      const hasType1 = history.some(s => s.poop_type === 1);
+      current = hasType1 ? 1 : 0;
+      target = 1;
+      displayText = hasType1 ? 'Completed' : 'Not logged yet';
+      break;
+    case 'soft_chicken':
+      const hasType5 = history.some(s => s.poop_type === 5);
+      current = hasType5 ? 1 : 0;
+      target = 1;
+      displayText = hasType5 ? 'Completed' : 'Not logged yet';
+      break;
+    
+    // Time pattern achievements
+    case 'morning_glory':
+      const hasMorning = history.some(s => { const d = new Date(s.startTime); return d.getHours() < 9 && d.getHours() >= 4; });
+      current = hasMorning ? 1 : 0;
+      target = 1;
+      displayText = hasMorning ? 'Completed' : 'Not logged yet';
+      break;
+    case 'night_owl':
+      const hasNight = history.some(s => { const d = new Date(s.startTime); return d.getHours() >= 20; });
+      current = hasNight ? 1 : 0;
+      target = 1;
+      displayText = hasNight ? 'Completed' : 'Not logged yet';
+      break;
+    case 'lunch_break':
+      const hasLunch = history.some(s => { const d = new Date(s.startTime); return d.getHours() >= 12 && d.getHours() < 14; });
+      current = hasLunch ? 1 : 0;
+      target = 1;
+      displayText = hasLunch ? 'Completed' : 'Not logged yet';
+      break;
+    case 'weekend_warrior':
+      const hasWeekend = history.some(s => { const d = new Date(s.startTime); return d.getDay() === 0 || d.getDay() === 6; });
+      current = hasWeekend ? 1 : 0;
+      target = 1;
+      displayText = hasWeekend ? 'Completed' : 'Not logged yet';
+      break;
+    
+    // Earnings achievement
+    case 'rich_pooper':
+      const maxEarnings = history.length > 0 ? Math.max(...history.map(s => s.earnings)) : 0;
+      current = maxEarnings;
+      target = 100;
+      displayText = `Max: ${current.toFixed(2)} / ${target}`;
+      break;
+    
+    // Streak achievement
+    case 'consistency':
+      const days = Array.from(new Set(history.map(s => new Date(s.startTime).toDateString()))).sort();
+      let streak = 0;
+      if (days.length > 0) {
+        streak = 1;
+        for (let i = days.length - 2; i >= 0; i--) {
+          const curr = new Date(days[i]);
+          const next = new Date(days[i+1]);
+          const diff = (next.getTime() - curr.getTime()) / (1000 * 3600 * 24);
+          if (diff >= 0.9 && diff <= 1.1) streak++;
+          else break;
+        }
+      }
+      current = streak;
+      target = 7;
+      displayText = `${current}/${target} days streak`;
+      break;
+    
+    default:
+      current = 0;
+      target = 1;
+      displayText = 'Unknown';
+  }
+  
+  const progress = target > 0 ? Math.min(100, Math.max(0, (current / target) * 100)) : 0;
+  
+  return {
+    achievement,
+    current,
+    target,
+    progress: isUnlocked ? 100 : progress,
+    isUnlocked,
+    displayText
+  };
+};
+
+const getNextAchievement = (achievements: Achievement[], history: PoopSession[]): AchievementProgress | null => {
+  for (const achievement of achievements) {
+    const progress = calculateAchievementProgress(achievement, history);
+    if (!progress.isUnlocked) {
+      return progress;
+    }
+  }
+  return null;
+};
+
+// --- HEALTH ADVICE SYSTEM (Rule-based, no AI) ---
+interface HealthAdvice {
+  id: string;
+  title: string;
+  message: string;
+  icon: string;
+  category: 'diet' | 'hydration' | 'exercise' | 'medical' | 'lifestyle';
+  severity: 'info' | 'warning' | 'urgent';
+  priority: number;
+}
+
+interface HealthRule {
+  id: string;
+  priority: number;
+  condition: (history: PoopSession[], recent: PoopSession[]) => boolean;
+  advice: HealthAdvice;
+}
+
+const HEALTH_RULES: HealthRule[] = [
+  // Bristol Scale - Hard Stool (Type 1)
+  {
+    id: 'hard_stool_frequent',
+    priority: 8,
+    condition: (history, recent) => {
+      const recentHard = recent.filter(s => s.poop_type === 1).length;
+      return recentHard >= 3 && recent.length >= 5;
+    },
+    advice: {
+      id: 'hard_stool_frequent',
+      title: '💧 Increase Water Intake',
+      message: 'You\'ve been experiencing hard stools frequently. Try drinking 8-10 glasses of water daily and eat more high-fiber foods like fruits and vegetables.',
+      icon: '💧',
+      category: 'hydration',
+      severity: 'warning',
+      priority: 8
+    }
+  },
+  {
+    id: 'hard_stool_occasional',
+    priority: 6,
+    condition: (history, recent) => {
+      const recentHard = recent.filter(s => s.poop_type === 1).length;
+      return recentHard >= 1 && recent.length >= 3;
+    },
+    advice: {
+      id: 'hard_stool_occasional',
+      title: '🥗 Add More Fiber',
+      message: 'Hard stools detected. Consider adding more fiber-rich foods like whole grains, beans, and leafy greens to your diet.',
+      icon: '🥗',
+      category: 'diet',
+      severity: 'info',
+      priority: 6
+    }
+  },
+  
+  // Bristol Scale - Watery Stool (Type 7)
+  {
+    id: 'watery_stool_frequent',
+    priority: 9,
+    condition: (history, recent) => {
+      const recentWatery = recent.filter(s => s.poop_type === 7).length;
+      return recentWatery >= 3 && recent.length >= 5;
+    },
+    advice: {
+      id: 'watery_stool_frequent',
+      title: '🌊 Stay Hydrated',
+      message: 'Frequent watery stools detected. Make sure to stay hydrated with water and electrolytes. Consider reducing spicy or greasy foods.',
+      icon: '🌊',
+      category: 'hydration',
+      severity: 'warning',
+      priority: 9
+    }
+  },
+  
+  // Color-based rules
+  {
+    id: 'red_stool_urgent',
+    priority: 10,
+    condition: (history, recent) => {
+      return recent.some(s => s.poop_color === 'red' && !s.conditions?.includes('period'));
+    },
+    advice: {
+      id: 'red_stool_urgent',
+      title: '🩸 Consult a Doctor',
+      message: 'Red stool detected (not related to period). This could indicate bleeding. Please consult a healthcare professional as soon as possible.',
+      icon: '🩸',
+      category: 'medical',
+      severity: 'urgent',
+      priority: 10
+    }
+  },
+  {
+    id: 'black_stool_urgent',
+    priority: 10,
+    condition: (history, recent) => {
+      return recent.some(s => s.poop_color === 'black');
+    },
+    advice: {
+      id: 'black_stool_urgent',
+      title: '⚫ Medical Attention Needed',
+      message: 'Black stool detected. This could indicate internal bleeding. Please consult a healthcare professional immediately.',
+      icon: '⚫',
+      category: 'medical',
+      severity: 'urgent',
+      priority: 10
+    }
+  },
+  {
+    id: 'green_stool',
+    priority: 5,
+    condition: (history, recent) => {
+      const greenCount = recent.filter(s => s.poop_color === 'green').length;
+      return greenCount >= 2 && recent.length >= 5;
+    },
+    advice: {
+      id: 'green_stool',
+      title: '🥬 Normal Variation',
+      message: 'Green stool is usually normal and can be caused by eating leafy greens or food coloring. No action needed unless persistent.',
+      icon: '🥬',
+      category: 'diet',
+      severity: 'info',
+      priority: 5
+    }
+  },
+  
+  // Volume-based rules
+  {
+    id: 'small_volume_frequent',
+    priority: 6,
+    condition: (history, recent) => {
+      const smallVolumes = recent.filter(s => s.poop_volume === 'Small').length;
+      return smallVolumes >= 3 && recent.length >= 5;
+    },
+    advice: {
+      id: 'small_volume_frequent',
+      title: '🥗 Increase Fiber Intake',
+      message: 'You\'ve been having small volume stools frequently. Try eating more vegetables, fruits, and whole grains to increase bulk.',
+      icon: '🥗',
+      category: 'diet',
+      severity: 'info',
+      priority: 6
+    }
+  },
+  
+  // Condition-based rules
+  {
+    id: 'diarrhea_spicy',
+    priority: 7,
+    condition: (history, recent) => {
+      const recentDiarrhea = recent.filter(s => 
+        (s.poop_type === 6 || s.poop_type === 7) && 
+        s.conditions?.includes('spicy')
+      );
+      return recentDiarrhea.length >= 2;
+    },
+    advice: {
+      id: 'diarrhea_spicy',
+      title: '🌶️ Reduce Spicy Foods',
+      message: 'Spicy foods seem to be causing digestive issues. Consider reducing spicy food intake and see if symptoms improve.',
+      icon: '🌶️',
+      category: 'diet',
+      severity: 'warning',
+      priority: 7
+    }
+  },
+  {
+    id: 'diarrhea_lactose',
+    priority: 7,
+    condition: (history, recent) => {
+      const recentDiarrhea = recent.filter(s => 
+        (s.poop_type === 6 || s.poop_type === 7) && 
+        s.conditions?.includes('lactose')
+      );
+      return recentDiarrhea.length >= 2;
+    },
+    advice: {
+      id: 'diarrhea_lactose',
+      title: '🧀 Consider Lactose Intolerance',
+      message: 'Dairy products seem to be causing digestive issues. You might want to try lactose-free alternatives or reduce dairy intake.',
+      icon: '🧀',
+      category: 'diet',
+      severity: 'warning',
+      priority: 7
+    }
+  },
+  
+  // Frequency-based rules
+  {
+    id: 'too_frequent',
+    priority: 7,
+    condition: (history, recent) => {
+      const last7Days = recent.filter(s => {
+        const daysAgo = (Date.now() - s.startTime) / (1000 * 60 * 60 * 24);
+        return daysAgo <= 7;
+      });
+      return last7Days.length > 14; // More than 2 times per day on average
+    },
+    advice: {
+      id: 'too_frequent',
+      title: '⚠️ High Frequency',
+      message: 'You\'ve been going to the bathroom very frequently. This could be due to diet, stress, or other factors. Consider tracking patterns.',
+      icon: '⚠️',
+      category: 'lifestyle',
+      severity: 'warning',
+      priority: 7
+    }
+  },
+  {
+    id: 'too_infrequent',
+    priority: 6,
+    condition: (history, recent) => {
+      const last7Days = recent.filter(s => {
+        const daysAgo = (Date.now() - s.startTime) / (1000 * 60 * 60 * 24);
+        return daysAgo <= 7;
+      });
+      return last7Days.length < 3 && recent.length >= 10; // Less than 3 times in 7 days
+    },
+    advice: {
+      id: 'too_infrequent',
+      title: '⏰ Low Frequency',
+      message: 'You might not be going frequently enough. Try increasing fiber intake, staying hydrated, and maintaining regular meal times.',
+      icon: '⏰',
+      category: 'lifestyle',
+      severity: 'info',
+      priority: 6
+    }
+  },
+  
+  // Time pattern rules
+  {
+    id: 'irregular_timing',
+    priority: 5,
+    condition: (history, recent) => {
+      if (recent.length < 5) return false;
+      const times = recent.map(s => new Date(s.startTime).getHours());
+      const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
+      const variance = times.reduce((sum, t) => sum + Math.pow(t - avgTime, 2), 0) / times.length;
+      return variance > 25; // High variance in timing
+    },
+    advice: {
+      id: 'irregular_timing',
+      title: '⏰ Establish Regular Schedule',
+      message: 'Your bathroom schedule seems irregular. Try to establish a consistent routine by going at similar times each day.',
+      icon: '⏰',
+      category: 'lifestyle',
+      severity: 'info',
+      priority: 5
+    }
+  },
+  
+  // Perfect stool (Type 4) - positive feedback
+  {
+    id: 'perfect_stool_frequent',
+    priority: 3,
+    condition: (history, recent) => {
+      const perfectStools = recent.filter(s => s.poop_type === 4).length;
+      return perfectStools >= 5 && recent.length >= 7;
+    },
+    advice: {
+      id: 'perfect_stool_frequent',
+      title: '🌟 Excellent!',
+      message: 'You\'ve been having perfect stools frequently! Keep up the good work with your diet and hydration habits.',
+      icon: '🌟',
+      category: 'lifestyle',
+      severity: 'info',
+      priority: 3
+    }
+  },
+  
+  // Duration-based rules
+  {
+    id: 'too_fast',
+    priority: 4,
+    condition: (history, recent) => {
+      const avgDuration = recent.length > 0 
+        ? recent.reduce((sum, s) => sum + s.durationSeconds, 0) / recent.length 
+        : 0;
+      return avgDuration < 60 && recent.length >= 5; // Average less than 1 minute
+    },
+    advice: {
+      id: 'too_fast',
+      title: '⚡ Very Quick',
+      message: 'Your sessions are very quick. While efficiency is good, make sure you\'re taking enough time when needed.',
+      icon: '⚡',
+      category: 'lifestyle',
+      severity: 'info',
+      priority: 4
+    }
+  },
+  {
+    id: 'too_slow',
+    priority: 6,
+    condition: (history, recent) => {
+      const avgDuration = recent.length > 0 
+        ? recent.reduce((sum, s) => sum + s.durationSeconds, 0) / recent.length 
+        : 0;
+      return avgDuration > 900 && recent.length >= 3; // Average more than 15 minutes
+    },
+    advice: {
+      id: 'too_slow',
+      title: '🤔 Long Sessions',
+      message: 'Your sessions are taking a long time. Consider increasing fiber and water intake to make things easier.',
+      icon: '🤔',
+      category: 'lifestyle',
+      severity: 'warning',
+      priority: 6
+    }
+  }
+];
+
+// Health advice display tracking (to prevent showing same advice forever)
+interface AdviceDisplayRecord {
+  adviceId: string;
+  firstShown: number; // timestamp
+  lastShown: number; // timestamp
+  timesShown: number;
+  dismissed: boolean; // User manually dismissed
+  dismissedAt?: number; // When user dismissed
+}
+
+const getAdviceDisplayHistory = (userId: string): Map<string, AdviceDisplayRecord> => {
+  const key = `poopPay_advice_history_${userId}`;
+  const stored = safeParse<Record<string, AdviceDisplayRecord>>(key);
+  return stored ? new Map(Object.entries(stored)) : new Map();
+};
+
+const saveAdviceDisplayHistory = (userId: string, history: Map<string, AdviceDisplayRecord>) => {
+  const key = `poopPay_advice_history_${userId}`;
+  const obj = Object.fromEntries(history);
+  localStorage.setItem(key, JSON.stringify(obj));
+};
+
+const updateAdviceDisplayRecord = (userId: string, adviceId: string) => {
+  const history = getAdviceDisplayHistory(userId);
+  const now = Date.now();
+  const existing = history.get(adviceId);
+  
+  if (existing) {
+    existing.lastShown = now;
+    existing.timesShown += 1;
+  } else {
+    history.set(adviceId, {
+      adviceId,
+      firstShown: now,
+      lastShown: now,
+      timesShown: 1,
+      dismissed: false
+    });
+  }
+  
+  saveAdviceDisplayHistory(userId, history);
+};
+
+const dismissAdvice = (userId: string, adviceId: string) => {
+  const history = getAdviceDisplayHistory(userId);
+  const now = Date.now();
+  const existing = history.get(adviceId);
+  
+  if (existing) {
+    existing.dismissed = true;
+    existing.dismissedAt = now;
+  } else {
+    history.set(adviceId, {
+      adviceId,
+      firstShown: now,
+      lastShown: now,
+      timesShown: 0,
+      dismissed: true,
+      dismissedAt: now
+    });
+  }
+  
+  saveAdviceDisplayHistory(userId, history);
+};
+
+const shouldShowAdvice = (
+  adviceId: string, 
+  userId: string, 
+  conditionStillMet: boolean
+): boolean => {
+  const history = getAdviceDisplayHistory(userId);
+  const record = history.get(adviceId);
+  const now = Date.now();
+  
+  // If condition is no longer met, don't show (it will disappear naturally)
+  if (!conditionStillMet) {
+    return false;
+  }
+  
+  // If user manually dismissed, don't show again (unless condition changed significantly)
+  if (record?.dismissed) {
+    // Allow re-showing if dismissed more than 30 days ago (in case situation changed)
+    if (record.dismissedAt) {
+      const daysSinceDismissed = (now - record.dismissedAt) / (1000 * 60 * 60 * 24);
+      if (daysSinceDismissed < 30) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  }
+  
+  // If never shown before, show it
+  if (!record) {
+    return true;
+  }
+  
+  // If shown more than 20 times, stop showing (user has seen it enough)
+  if (record.timesShown > 20) {
+    return false;
+  }
+  
+  // If shown more than 3 days ago, show again (reminder)
+  const daysSinceLastShown = (now - record.lastShown) / (1000 * 60 * 60 * 24);
+  if (daysSinceLastShown > 3) {
+    return true;
+  }
+  
+  // If shown recently (within 3 days), don't show again (avoid spam)
+  // But always show urgent medical advice
+  return false;
+};
+
+const generateHealthAdvice = (history: PoopSession[], userId?: string): HealthAdvice[] => {
+  if (history.length === 0) return [];
+  
+  // Get recent sessions (last 30 days)
+  const recent = history.filter(s => {
+    const daysAgo = (Date.now() - s.startTime) / (1000 * 60 * 60 * 24);
+    return daysAgo <= 30;
+  });
+  
+  if (recent.length === 0) return [];
+  
+  // Check all rules and get matched ones
+  const matchedRules = HEALTH_RULES
+    .filter(rule => {
+      const conditionMet = rule.condition(history, recent);
+      // Only show if condition is met
+      if (!conditionMet) return false;
+      if (!userId) return true; // If no user, show all (for testing)
+      
+      // Always show urgent medical advice (severity: urgent)
+      if (rule.advice.severity === 'urgent') {
+        return true;
+      }
+      
+      // For other advice, check display history
+      return shouldShowAdvice(rule.id, userId, conditionMet);
+    })
+    .sort((a, b) => b.priority - a.priority); // Sort by priority (highest first)
+  
+  // Return top 5 most important advice
+  const adviceList = matchedRules.slice(0, 5).map(rule => rule.advice);
+  
+  // Update display history for shown advice
+  if (userId) {
+    adviceList.forEach(advice => {
+      updateAdviceDisplayRecord(userId, advice.id);
+    });
+  }
+  
+  return adviceList;
+};
+
 // --- HARDCODED "AI" LOGIC ---
 const getFinancialWisdom = (earnings: number, durationMinutes: number) => {
     if (earnings < 0.5) return "Basically unpaid labor.";
@@ -423,7 +1060,7 @@ const App: React.FC = () => {
                             localStorage.removeItem('poopPay_active_session_start');
                         }
                     } else {
-                        setView(AppView.HOME);
+                    setView(AppView.HOME);
                     }
                 } else {
                     setView(AppView.ONBOARDING);
@@ -927,7 +1564,7 @@ const App: React.FC = () => {
           // Modern clipboard API
           if (navigator.clipboard && navigator.clipboard.writeText) {
               await navigator.clipboard.writeText(text);
-              showToast("ID Copied!", "📋");
+      showToast("ID Copied!", "📋");
           } else {
               // Fallback for older browsers or non-HTTPS
               const textArea = document.createElement('textarea');
@@ -1204,6 +1841,7 @@ const App: React.FC = () => {
               )}
           </div>
       </div>
+
     </div>
     );
   };
@@ -1275,8 +1913,8 @@ const App: React.FC = () => {
                  </div>
                 <div className="mt-2 text-base text-red-500 font-bold flex items-center gap-1">
                     <AlertTriangle size={18} />
-                    <span>Save this ID to login on other devices!</span>
-                </div>
+                     <span>Save this ID to login on other devices!</span>
+                 </div>
              </div>
         </Card>
 
@@ -1481,19 +2119,41 @@ const App: React.FC = () => {
                 {ACHIEVEMENTS_LIST.map((ach) => { 
                     const isUnlocked = unlockedIds.includes(ach.id);
                     const isUnviewed = isUnlocked && !viewedAchievements.has(ach.id);
+                    const progress = calculateAchievementProgress(ach, history);
+                    
                     return ( 
                         <div 
                             key={ach.id} 
-                            className={`border-2 rounded-xl p-3 flex items-center gap-4 transition-all ${isUnlocked ? 'bg-white border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-gray-200 border-gray-400 opacity-60 grayscale'} ${isUnviewed ? 'ring-4 ring-yellow-400 animate-pulse' : ''}`}
+                            className={`border-2 rounded-xl p-3 transition-all ${isUnlocked ? 'bg-white border-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]' : 'bg-gray-200 border-gray-400 opacity-60'} ${isUnviewed ? 'ring-4 ring-yellow-400 animate-pulse' : ''}`}
                         > 
-                            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl border-2 ${isUnlocked ? 'bg-brand-yellow border-black' : 'bg-gray-300 border-gray-400'}`}> 
-                                {ach.icon} 
-                            </div> 
-                            <div className="flex-1"> 
-                                <h3 className={`font-black ${isUnlocked ? 'text-brand-brown' : 'text-gray-600'}`}>{ach.title}</h3> 
-                                <p className="text-xs text-gray-500 leading-tight">{ach.description}</p> 
-                            </div> 
-                            {isUnlocked && <Check size={20} className="text-green-600" />} 
+                            <div className="flex items-center gap-4">
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl border-2 ${isUnlocked ? 'bg-brand-yellow border-black' : 'bg-gray-300 border-gray-400'}`}> 
+                                    {ach.icon} 
+                                </div> 
+                                <div className="flex-1"> 
+                                    <div className="flex items-center gap-2">
+                                        <h3 className={`font-black ${isUnlocked ? 'text-brand-brown' : 'text-gray-600'}`}>{ach.title}</h3>
+                                    </div>
+                                    <p className="text-xs text-gray-500 leading-tight mb-2">{ach.description}</p>
+                                    
+                                    {/* Progress Bar */}
+                                    {!isUnlocked && (
+                                        <div className="space-y-1">
+                                            <div className="flex items-center justify-between text-xs">
+                                                <span className="text-gray-600 font-bold">{progress.displayText}</span>
+                                                <span className="text-gray-600 font-bold">{Math.round(progress.progress)}%</span>
+                                            </div>
+                                            <div className="w-full bg-gray-300 rounded-full h-2 border border-gray-400 overflow-hidden">
+                                                <div 
+                                                    className="h-full rounded-full transition-all bg-gray-500"
+                                                    style={{ width: `${progress.progress}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div> 
+                                {isUnlocked && <Check size={20} className="text-green-600 flex-shrink-0" />} 
+                            </div>
                         </div> 
                     ) 
                 })}

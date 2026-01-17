@@ -19,7 +19,7 @@ const BRICK_COLS = 6;
 // DIFFICULTY TWEAKS
 const BASE_SPEED_DESKTOP = 5.0; // Desktop speed
 const BASE_SPEED_MOBILE = 5.5; // Mobile speed (slightly faster)
-const LEVEL_SPEED_INC = 0.05;
+const LEVEL_SPEED_INC = 0.05; 
 
 // Detect if device is mobile
 const isMobileDevice = () => {
